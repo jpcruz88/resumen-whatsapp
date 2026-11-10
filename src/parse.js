@@ -42,9 +42,13 @@ export function parsearEventoEvolution(payload) {
   }
 
   const ts = Number(d.messageTimestamp ?? 0);
+  // remoteJidAlt guarda la otra forma del id de la misma persona (número o @lid). Un grupo no vale.
+  const alt = d.key.remoteJidAlt;
+  const chatAlt = typeof alt === 'string' && alt && !alt.endsWith('@g.us') ? alt : null;
   const parseado = {
     id: d.key.id,
     chat: d.key.remoteJid,
+    chatAlt,
     propio: d.key.fromMe === true,
     nombre: d.pushName ?? '',
     tipo,

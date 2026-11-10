@@ -25,7 +25,10 @@ export function crearManejador({ almacen, secreto, evolution }) {
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
       const m = parsearEventoEvolution(cuerpo);
-      if (m && (await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+      // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
+      const chat = m ? await almacen.resolverChat(m) : null;
+      if (m) m.chat = chat;
+      if (chat && (await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
         // Con webhook.base64 el medio viaja en el payload: no se descarga nada de Evolution.
         const embebido = m.base64 ? Buffer.from(m.base64, 'base64') : null;
         try {

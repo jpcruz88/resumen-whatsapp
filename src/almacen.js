@@ -21,6 +21,15 @@ export class Almacen {
     return join(this.dir, `${nombre}.jsonl`);
   }
 
+  // El chat vigilado al que pertenece un mensaje: el directo, o el alterno (la otra forma del id
+  // de la misma persona). null si ninguno está vigilado.
+  async resolverChat(m) {
+    if (!m) return null;
+    if (m.chat && (await this.vigilados.esVigilado(m.chat))) return m.chat;
+    if (m.chatAlt && (await this.vigilados.esVigilado(m.chatAlt))) return m.chatAlt;
+    return null;
+  }
+
   async guardar(m) {
     if (!m || !(await this.vigilados.esVigilado(m.chat))) return false;
     await mkdir(this.dir, { recursive: true });
@@ -28,7 +37,8 @@ export class Almacen {
     const existentes = await this.#ids(ruta);
     if (existentes.has(m.id)) return false;
     // El base64 del medio viaja solo en memoria hacia guardarMedio; nunca entra al JSONL.
-    const { base64: _base64, ...paraGuardar } = m;
+    // chatAlt solo sirve para resolver el chat vigilado.
+    const { base64: _base64, chatAlt: _chatAlt, ...paraGuardar } = m;
     await appendFile(ruta, JSON.stringify(paraGuardar) + '\n');
     return true;
   }
