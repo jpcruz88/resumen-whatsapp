@@ -47,8 +47,36 @@ test('parsea extendedTextMessage y marca fromMe', () => {
 test('ignora eventos que no son messages.upsert y mensajes sin texto', () => {
   assert.equal(parsearEventoEvolution({ event: 'connection.update', data: {} }), null);
   const sinTexto = evento(CHAT_OK, '');
-  sinTexto.data.message = { imageMessage: { caption: '' } };
+  sinTexto.data.message = { videoMessage: { caption: '' } };
   assert.equal(parsearEventoEvolution(sinTexto), null);
+});
+
+test('parsea audio con mediaId y mimetype, sin texto', () => {
+  const p = evento(CHAT_OK, '');
+  p.data.message = { audioMessage: { mimetype: 'audio/ogg; codecs=opus' } };
+  const m = parsearEventoEvolution(p);
+  assert.equal(m.tipo, 'audio');
+  assert.equal(m.mediaId, 'ID1');
+  assert.equal(m.mimetype, 'audio/ogg; codecs=opus');
+  assert.equal(m.texto, null);
+});
+
+test('parsea imagen con caption como texto', () => {
+  const p = evento(CHAT_OK, '');
+  p.data.message = { imageMessage: { mimetype: 'image/jpeg', caption: 'factura' } };
+  const m = parsearEventoEvolution(p);
+  assert.equal(m.tipo, 'imagen');
+  assert.equal(m.texto, 'factura');
+  assert.equal(m.mediaId, 'ID1');
+  assert.equal(m.mimetype, 'image/jpeg');
+});
+
+test('texto marca tipo texto; video y grupos devuelven null', () => {
+  assert.equal(parsearEventoEvolution(evento(CHAT_OK, 'hola')).tipo, 'texto');
+  const v = evento(CHAT_OK, '');
+  v.data.message = { videoMessage: { mimetype: 'video/mp4' } };
+  assert.equal(parsearEventoEvolution(v), null);
+  assert.equal(parsearEventoEvolution(evento('120363000000@g.us', 'hola')), null);
 });
 
 // ---------- almacén ----------
