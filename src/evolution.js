@@ -1,10 +1,11 @@
 // Cliente mínimo de Evolution API: descarga medios y lista chats. Nunca envía mensajes.
-export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch }) {
+export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch, timeoutMs = 30000 }) {
   async function post(ruta, cuerpo) {
     const r = await fetchFn(`${url}${ruta}/${instancia}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: apiKey },
       body: JSON.stringify(cuerpo),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!r.ok) throw new Error(`Evolution respondió ${r.status} en ${ruta}`);
     return r.json();

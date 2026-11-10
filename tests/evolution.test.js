@@ -101,3 +101,33 @@ test('rutaMedio devuelve media/<basename(id)>.<ext> con el mismo mapeo que guard
   }
   assert.equal(a.rutaMedio({ mediaId: '../../etc/x', mimetype: 'image/png' }), join(dir, 'media', 'x.png'));
 });
+
+// fetch falso que respeta la señal: no responde nunca, solo rechaza al abortarse.
+const fetchColgado = (opts) => new Promise((_, reject) => {
+  if (!opts.signal) return; // sin señal se queda colgado: la prueba lo detecta con su propio limite
+  opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+});
+
+for (const [nombre, llamar] of [
+  ['descargarMedia', (c) => c.descargarMedia('X', 'c')],
+  ['listarChats', (c) => c.listarChats()],
+]) {
+  test(`${nombre} rechaza por timeout en vez de colgarse`, async () => {
+    const c = crearClienteEvolution({
+      url: 'http://evo', apiKey: 'K', instancia: 'i', timeoutMs: 50,
+      fetchFn: async (url, opts) => fetchColgado(opts),
+    });
+    const limite = new Promise((_, rej) => setTimeout(() => rej(new Error('colgado: no uso signal')), 2000));
+    await assert.rejects(Promise.race([llamar(c), limite]), (e) => e.name === 'TimeoutError');
+  });
+}
+
+test('el timeout por defecto es de 30 s y se pasa signal a fetch', async () => {
+  let opts;
+  const c = crearClienteEvolution({
+    url: 'http://evo', apiKey: 'K', instancia: 'i',
+    fetchFn: async (u, o) => { opts = o; return respuesta(200, []); },
+  });
+  await c.listarChats();
+  assert.ok(opts.signal instanceof AbortSignal);
+});
