@@ -39,7 +39,7 @@ services:
       - AUTHENTICATION_TYPE=apikey
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-postgres:5432/evolution
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD:?define EVOLUTION_DB_PASSWORD}@evolution-postgres:5432/evolution
       - DATABASE_CONNECTION_CLIENT_NAME=resumen_whatsapp
       # Metadatos sí (instancia, chats, contactos); contenido de mensajes no.
       - DATABASE_SAVE_DATA_INSTANCE=true
