@@ -1,12 +1,12 @@
-// Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista permitida.
+// Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista de vigilados.
 import { appendFile, readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
 export class Almacen {
-  constructor({ dir, chatsPermitidos }) {
+  constructor({ dir, vigilados }) {
     this.dir = dir;
-    this.permitidos = new Set(chatsPermitidos);
+    this.vigilados = vigilados;
   }
 
   archivo(chat) {
@@ -15,7 +15,7 @@ export class Almacen {
   }
 
   async guardar(m) {
-    if (!m || !this.permitidos.has(m.chat)) return false;
+    if (!m || !(await this.vigilados.esVigilado(m.chat))) return false;
     await mkdir(this.dir, { recursive: true });
     const ruta = this.archivo(m.chat);
     const existentes = await this.#ids(ruta);
@@ -25,7 +25,7 @@ export class Almacen {
   }
 
   async leer({ chat, desde, hasta }) {
-    if (!this.permitidos.has(chat)) return [];
+    if (!(await this.vigilados.esVigilado(chat))) return [];
     let contenido = '';
     try {
       contenido = await readFile(this.archivo(chat), 'utf8');

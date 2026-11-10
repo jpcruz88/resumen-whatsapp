@@ -5,11 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parsearEventoEvolution } from '../src/parse.js';
 import { Almacen } from '../src/almacen.js';
+import { Vigilados } from '../src/vigilados.js';
 import { construirPrompt, resumir } from '../src/resumen.js';
 import { crearManejador } from '../src/servidor.js';
 
 const CHAT_OK = '5215511111111@s.whatsapp.net';
 const CHAT_NO = '5215522222222@s.whatsapp.net';
+
+async function vigilando(dir, ...chats) {
+  const v = new Vigilados({ archivo: join(dir, 'vigilados.json') });
+  for (const c of chats) await v.activar(c);
+  return v;
+}
 
 function evento(jid, texto, { fromMe = false, ts = 1762646400, id = 'ID1' } = {}) {
   return {
@@ -84,7 +91,7 @@ test('texto marca tipo texto; video y grupos devuelven null', () => {
 test('guarda solo chats permitidos y filtra por periodo', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
-    const almacen = new Almacen({ dir, chatsPermitidos: [CHAT_OK] });
+    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
     await almacen.guardar(parsearEventoEvolution(evento(CHAT_OK, 'viejo', { ts: 1000, id: 'a' })));
     await almacen.guardar(parsearEventoEvolution(evento(CHAT_OK, 'nuevo', { ts: 2000000000, id: 'b' })));
     await almacen.guardar(parsearEventoEvolution(evento(CHAT_NO, 'ajeno', { id: 'c' })));
@@ -109,7 +116,7 @@ test('guarda solo chats permitidos y filtra por periodo', async () => {
 test('no duplica un mensaje con el mismo id', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
-    const almacen = new Almacen({ dir, chatsPermitidos: [CHAT_OK] });
+    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
     const m = parsearEventoEvolution(evento(CHAT_OK, 'uno', { id: 'dup' }));
     await almacen.guardar(m);
     await almacen.guardar(m);
@@ -166,7 +173,7 @@ test('resumir sin mensajes no llama al modelo', async () => {
 test('webhook guarda el mensaje cuando el secreto es correcto', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
-    const almacen = new Almacen({ dir, chatsPermitidos: [CHAT_OK] });
+    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
     const manejar = crearManejador({ almacen, secreto: 'S3CRETO', resumirFn: async () => '' });
     const r = await manejar({
       metodo: 'POST',
@@ -184,7 +191,7 @@ test('webhook guarda el mensaje cuando el secreto es correcto', async () => {
 test('webhook rechaza un secreto incorrecto', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
-    const almacen = new Almacen({ dir, chatsPermitidos: [CHAT_OK] });
+    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
     const manejar = crearManejador({ almacen, secreto: 'S3CRETO', resumirFn: async () => '' });
     const r = await manejar({
       metodo: 'POST',
@@ -202,7 +209,7 @@ test('webhook rechaza un secreto incorrecto', async () => {
 test('GET /resumen devuelve el resumen del periodo pedido', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
-    const almacen = new Almacen({ dir, chatsPermitidos: [CHAT_OK] });
+    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
     await almacen.guardar(parsearEventoEvolution(evento(CHAT_OK, 'mandame 3 facturas', { id: 'r1' })));
     const manejar = crearManejador({
       almacen,

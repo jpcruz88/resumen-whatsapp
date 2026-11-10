@@ -6,6 +6,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { parsearEventoEvolution } from './parse.js';
 import { resumir } from './resumen.js';
 import { Almacen } from './almacen.js';
+import { Vigilados } from './vigilados.js';
+import { join } from 'node:path';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -36,13 +38,16 @@ export function crearManejador({ almacen, secreto, resumirFn }) {
 }
 
 // Arranque real: lee configuración del entorno y escucha en el puerto indicado.
-export function arrancar(env = process.env) {
+export async function arrancar(env = process.env) {
   const chats = (env.CHATS_PERMITIDOS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (chats.length === 0) throw new Error('Define CHATS_PERMITIDOS (JIDs separados por coma)');
   if (!env.SECRETO_WEBHOOK) throw new Error('Define SECRETO_WEBHOOK');
   if (!env.GEMINI_API_KEY) throw new Error('Define GEMINI_API_KEY');
 
-  const almacen = new Almacen({ dir: env.DATOS_DIR ?? './datos', chatsPermitidos: chats });
+  const dir = env.DATOS_DIR ?? './datos';
+  const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
+  for (const c of chats) await vigilados.activar(c);
+  const almacen = new Almacen({ dir, vigilados });
   const manejar = crearManejador({
     almacen,
     secreto: env.SECRETO_WEBHOOK,

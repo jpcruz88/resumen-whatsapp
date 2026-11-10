@@ -2,6 +2,8 @@ import { pathToFileURL } from 'node:url';
 // Uso: node src/cli.js --chat <JID> [--desde 2026-11-02] [--hasta 2026-11-09]
 // Lee del almacén local y muestra el resumen en la terminal.
 import { Almacen } from './almacen.js';
+import { Vigilados } from './vigilados.js';
+import { join } from 'node:path';
 import { resumir } from './resumen.js';
 
 function leerArgs(argv) {
@@ -16,7 +18,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   if (!a.chat) throw new Error('Falta --chat <JID>');
   if (!env.GEMINI_API_KEY) throw new Error('Define GEMINI_API_KEY');
 
-  const almacen = new Almacen({ dir: env.DATOS_DIR ?? './datos', chatsPermitidos: chats });
+  const dir = env.DATOS_DIR ?? './datos';
+  const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
+  for (const c of chats) await vigilados.activar(c);
+  const almacen = new Almacen({ dir, vigilados });
   const mensajes = await almacen.leer({
     chat: a.chat,
     desde: a.desde ? new Date(a.desde).toISOString() : undefined,
