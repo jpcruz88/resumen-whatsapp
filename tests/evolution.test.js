@@ -35,9 +35,10 @@ test('descargarMedia lanza error con el status si no es 2xx', async () => {
 });
 
 // fetch falso que contesta distinto según el endpoint.
-function fetchPorRuta({ chats = [], contactos = [] }, llamadas = []) {
+function fetchPorRuta({ chats = [], contactos = [], grupos }, llamadas = []) {
   return async (url, opts) => {
     llamadas.push({ url, opts });
+    if (url.includes('/group/fetchAllGroups/')) return grupos === undefined ? respuesta(500, {}) : respuesta(200, grupos);
     if (url.includes('/chat/findChats/')) return respuesta(200, chats);
     if (url.includes('/chat/findContacts/')) return respuesta(200, contactos);
     return respuesta(404, {});
@@ -66,9 +67,13 @@ test('listarChats consulta findChats y findContacts (POST con where vacío) y ma
     { jid: NUM1, nombre: 'Cliente Uno' },
   ]);
   const urls = llamadas.map((l) => l.url).sort();
-  assert.deepEqual(urls, ['http://evo/chat/findChats/i', 'http://evo/chat/findContacts/i']);
+  assert.deepEqual(urls, [
+    'http://evo/chat/findChats/i',
+    'http://evo/chat/findContacts/i',
+    'http://evo/group/fetchAllGroups/i?getParticipants=false',
+  ]);
   for (const l of llamadas) {
-    assert.equal(l.opts.method, 'POST');
+    assert.equal(l.opts.method, l.url.includes('fetchAllGroups') ? 'GET' : 'POST');
     assert.equal(l.opts.headers.apikey, 'K');
   }
   const cont = llamadas.find((l) => l.url.includes('findContacts'));
@@ -147,6 +152,31 @@ test('listarChats pone al final los nombres que no empiezan con letra o número'
   const nombres = (await c.listarChats()).map((x) => x.nombre);
   assert.deepEqual(nombres.slice(0, 2), ['Ana', 'Zeta']);
   assert.deepEqual(new Set(nombres.slice(2)), new Set(['.', '¡Hola']));
+});
+
+test('listarChats toma los grupos de fetchAllGroups (id y subject) y descarta los que ya no están', async () => {
+  const llamadas = [];
+  const c = clienteCon({
+    contactos: [contacto('viejo@g.us', 'Grupo que ya no existe', { isGroup: true, type: 'group' }), contacto(NUM1, 'Cliente Uno')],
+    grupos: [{ id: 'nuevo@g.us', subject: 'Bodega Norte', size: 12 }, { id: 'otro@g.us', subject: 'Equipo' }],
+  }, llamadas);
+  assert.deepEqual(await c.listarChats(), [
+    { jid: 'nuevo@g.us', nombre: 'Bodega Norte', grupo: true },
+    { jid: NUM1, nombre: 'Cliente Uno' },
+    { jid: 'otro@g.us', nombre: 'Equipo', grupo: true },
+  ]);
+  const g = llamadas.find((l) => l.url.includes('/group/fetchAllGroups/'));
+  assert.equal(g.url, 'http://evo/group/fetchAllGroups/i?getParticipants=false');
+  assert.equal(g.opts.method, 'GET');
+  assert.equal(g.opts.headers.apikey, 'K');
+});
+
+test('si fetchAllGroups falla, listarChats usa los grupos de la lista de contactos', async () => {
+  const c = clienteCon({ contactos: [contacto('b@g.us', 'Grupo B', { isGroup: true, type: 'group' }), contacto(NUM1, 'Cliente Uno')] });
+  assert.deepEqual(await c.listarChats(), [
+    { jid: NUM1, nombre: 'Cliente Uno' },
+    { jid: 'b@g.us', nombre: 'Grupo B', grupo: true },
+  ]);
 });
 
 test('guardarMedio escribe media/<id>.<ext> segun mimetype', async () => {

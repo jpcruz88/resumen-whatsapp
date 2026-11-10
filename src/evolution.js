@@ -1,4 +1,4 @@
-// Cliente mínimo de Evolution API: descarga medios y lista contactos. Nunca envía mensajes.
+// Cliente mínimo de Evolution API: descarga medios y lista contactos y grupos. Nunca envía mensajes.
 // Los nombres que no empiezan con letra o número (".", emojis, signos) van al final: son ruido, no contactos.
 const empiezaConLetra = (n) => /^[\p{L}\p{N}]/u.test(String(n ?? '').trim());
 const porNombre = (a, b) => {
@@ -20,6 +20,18 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
     return r.json();
   }
 
+  // Lista oficial de grupos vigentes y con su nombre real (subject). La lista de contactos puede traer
+  // grupos que ya no existen y omitir los nuevos.
+  async function obtenerGrupos() {
+    const r = await fetchFn(`${url}/group/fetchAllGroups/${instancia}?getParticipants=false`, {
+      method: 'GET',
+      headers: { apikey: apiKey },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!r.ok) throw new Error(`Evolution respondió ${r.status} en fetchAllGroups`);
+    return r.json();
+  }
+
   return {
     // `chat` solo cumple la firma; el endpoint no lo necesita (R4).
     async descargarMedia(mediaId, chat) { // eslint-disable-line no-unused-vars
@@ -32,20 +44,28 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
     // Con el historial apagado Evolution no guarda chats (findChats viene vacío): los contactos
     // son la fuente real. Se unen ambas listas; se quitan bots y difusiones y se marcan los grupos.
     async listarChats() {
-      const [chats, contactos] = await Promise.all([
+      const [chats, contactos, grupos] = await Promise.all([
         post('/chat/findChats', {}),
         post('/chat/findContacts', { where: {} }),
+        obtenerGrupos().catch(() => null), // si falla, se usan los grupos de la lista de contactos
       ]);
+      const gruposVigentes = Array.isArray(grupos) ? grupos : null;
       const porJid = new Map();
       for (const c of [...chats, ...contactos]) {
         const jid = c?.remoteJid;
         if (!jid) continue;
         const grupo = jid.endsWith('@g.us');
+        if (grupo && gruposVigentes) continue; // con la lista oficial, los grupos salen de ahí
         if (!grupo && !/@(s\.whatsapp\.net|lid)$/.test(jid)) continue;
         const nombre = c.pushName ?? null;
         const previo = porJid.get(jid);
         if (!previo || (previo.nombre == null && nombre != null)) {
           porJid.set(jid, grupo ? { jid, nombre, grupo: true } : { jid, nombre });
+        }
+      }
+      for (const g of gruposVigentes ?? []) {
+        if (typeof g?.id === 'string' && g.id.endsWith('@g.us')) {
+          porJid.set(g.id, { jid: g.id, nombre: g.subject ?? null, grupo: true });
         }
       }
       const clave = (n) => String(n ?? '').trim().toLowerCase();
