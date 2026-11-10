@@ -218,16 +218,18 @@ export async function arrancar(env = process.env) {
   const listarChats = conCache(() => evolution.listarChats(), { ttlMs: 5 * 60 * 1000 });
   const ffmpeg = buscarFfmpeg();
   const convertir = ffmpeg ? (origen, destino) => convertirAM4a({ origen, destino, ffmpeg }) : null;
+  const nombres = conCache(() => evolution.mapaNombres(), { ttlMs: 5 * 60 * 1000 });
+  nombres.precalentar();
   const nombrePara = async (chat) => (await listarChats().catch(() => [])).find((c) => c.jid === chat)?.nombre;
   const manejar = crearRouter({
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
-    conversacion: crearConversacion({ almacen, vigilados, nombrePara, version: pkg.version, dirReportes }),
+    conversacion: crearConversacion({ almacen, vigilados, nombrePara, nombres, version: pkg.version, dirReportes }),
     medios: crearMedios({ almacen, convertir }),
     panel: crearPanel({
       vigilados,
       evolution: { listarChats },
       generar: ({ chat, nombre, desde, hasta }) =>
-        generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }),
+        generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution, nombres }),
     }),
     dirReportes,
     hosts: [`127.0.0.1:${puerto}`, `localhost:${puerto}`, ...cfg.panelHosts],

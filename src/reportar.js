@@ -1,11 +1,12 @@
 // Orquesta un reporte: valida chat, procesa medios, resume, renderiza y guarda.
 import { procesarMedio } from './medios.js';
 import { resumir } from './resumen.js';
+import { conNombres } from './nombres.js';
 import { renderReporte, guardarReporte, nuevoIdReporte } from './reporte.js';
 import pkg from '../package.json' with { type: 'json' };
 
 // `evolution` es opcional: si falta el archivo de un medio, se intenta bajarlo una vez.
-export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }) {
+export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution, nombres }) {
   // Primero el rechazo: antes de leer mensajes o mandar nada a Gemini.
   if (!(await vigilados.esVigilado(chat))) throw new Error('chat no vigilado');
 
@@ -36,7 +37,9 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
     }
   }
 
-  const markdown = await resumir({ mensajes, apiKey, model, fetchFn });
+  // A Gemini le llegan nombres de personas, no números internos de WhatsApp.
+  const mapaNombres = await Promise.resolve(nombres?.()).catch(() => undefined);
+  const markdown = await resumir({ mensajes: conNombres(mensajes, mapaNombres), apiKey, model, fetchFn });
   const vigiladoDesde = (await vigilados.desdeDe?.(chat)) ?? null;
   const id = nuevoIdReporte(); // se conoce antes de escribir para que la conversación pueda volver a este reporte
   const enlaceConversacion = `/conversacion?${new URLSearchParams({ chat, desde, hasta, reporte: id })}`;

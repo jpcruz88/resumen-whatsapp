@@ -41,6 +41,16 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
       });
       return { buffer: Buffer.from(d.base64, 'base64'), mimetype: d.mimetype };
     },
+    // jid -> nombre de todos los contactos (número y @lid). Sirve para poner nombre a quien el historial
+    // trae solo con su número interno.
+    async mapaNombres() {
+      const contactos = await post('/chat/findContacts', { where: {} });
+      const mapa = new Map();
+      for (const c of contactos) {
+        if (c?.remoteJid && typeof c.pushName === 'string' && c.pushName.trim() !== '') mapa.set(c.remoteJid, c.pushName);
+      }
+      return mapa;
+    },
     // Con el historial apagado Evolution no guarda chats (findChats viene vacío): los contactos
     // son la fuente real. Se unen ambas listas; se quitan bots y difusiones y se marcan los grupos.
     async listarChats() {

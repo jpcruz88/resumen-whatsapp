@@ -97,8 +97,11 @@ test('lo anterior a la vigilancia o sin archivo se explica en vez de mostrar un 
     ],
   }));
   assert.ok(!html.includes('<audio') && !html.includes('<img'));
-  assert.equal((html.match(/anterior a la vigilancia/g) || []).length, 2);
-  assert.match(html, /Archivo no disponible/);
+  assert.equal((html.match(/Es de antes de vigilar este chat/g) || []).length, 2);
+  assert.match(html, /<strong>Audio no disponible<\/strong>/);
+  assert.match(html, /<strong>Imagen no disponible<\/strong>/);
+  assert.match(html, /<strong>Archivo no disponible<\/strong>/);
+  assert.equal((html.match(/class="sin-medio"/g) || []).length, 3);
 });
 
 test('trae buscador y filtros por tipo de mensaje', () => {

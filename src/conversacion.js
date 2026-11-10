@@ -5,7 +5,8 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { escaparHtml, ID_REPORTE } from './reporte.js';
 import { inicioDelDia, finDelDia, etiquetaPeriodo, etiquetaDia } from './fechas.js';
-import { BASE_CSS, FLECHA, ICONO_BUSCAR, ICONO_CHAT } from './estilos.js';
+import { BASE_CSS, FLECHA, ICONO_BUSCAR, ICONO_CHAT, ICONO_IMAGEN, ICONO_AUDIO } from './estilos.js';
+import { conNombres } from './nombres.js';
 
 export const POR_PAGINA = 300;
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,7 +45,10 @@ h1{margin:4px 0 6px;font-size:1.6rem;line-height:1.2;letter-spacing:-.01em;overf
 audio{display:block;width:min(300px,100%);height:40px;margin:4px 0}
 .transcripcion{margin:4px 0 0;color:var(--suave);font-size:.9rem}
 .transcripcion strong{color:var(--texto)}
-.sin-medio{margin:0;color:var(--suave);font-size:.9rem;font-style:italic}
+.sin-medio{display:flex;align-items:center;gap:10px;margin:2px 0 4px;padding:10px 12px;background:var(--sup2);border-radius:10px;color:var(--suave)}
+.sin-medio svg{flex:none;width:22px;height:22px}
+.sin-medio strong{display:block;color:var(--texto);font-size:.95rem}
+.sin-medio span{font-size:.85rem}
 .vacio{margin:16px 0;padding:16px;background:var(--sup2);border-radius:10px}
 .vacio p{margin:0 0 8px}.vacio p:last-child{margin:0;color:var(--suave)}
 .paginas{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0;color:var(--suave);font-size:.9rem}
@@ -118,6 +122,13 @@ function conEnlaces(texto) {
   });
 }
 
+// Aviso de un archivo que no se puede mostrar: qué es y por qué.
+function sinMedio(m, icono, que) {
+  const titulo = m.sinMedio ? `${que} no disponible` : 'Archivo no disponible';
+  const motivo = m.sinMedio ? 'Es de antes de vigilar este chat.' : 'No se guardó el archivo de este mensaje.';
+  return `<div class="sin-medio">${icono}<p><strong>${titulo}</strong><span>${motivo}</span></p></div>`;
+}
+
 function cuerpoMedio(m) {
   const nombre = escaparHtml(m.nombre || 'un contacto');
   const parrafo = m.texto ? `<p class="texto">${conEnlaces(m.texto)}</p>` : '';
@@ -126,14 +137,14 @@ function cuerpoMedio(m) {
       const u = escaparHtml(m.urlMedio);
       return `<a class="foto" href="${u}" target="_blank" rel="noopener">\n<img src="${u}" alt="Imagen enviada por ${nombre}" loading="lazy">\n</a>${parrafo}`;
     }
-    return `<p class="sin-medio">${m.sinMedio ? 'Imagen anterior a la vigilancia: no disponible' : 'Archivo no disponible'}</p>${parrafo}`;
+    return `${sinMedio(m, ICONO_IMAGEN, 'Imagen')}${parrafo}`;
   }
   if (m.urlMedio) {
     const u = escaparHtml(m.urlMedio);
     const transcripcion = m.transcripcion ? `<p class="transcripcion"><strong>Transcripción</strong> ${escaparHtml(m.transcripcion)}</p>` : '';
     return `<audio controls preload="none">\n<source src="${u}" type="audio/ogg">\n<source src="${u}.m4a" type="audio/mp4">\n</audio>${transcripcion}`;
   }
-  return `<p class="sin-medio">${m.sinMedio ? 'Audio anterior a la vigilancia: no disponible' : 'Archivo no disponible'}</p>`;
+  return sinMedio(m, ICONO_AUDIO, 'Audio');
 }
 
 function mensajeHtml(m) {
@@ -244,7 +255,7 @@ const hoy = () => {
 };
 
 // GET /conversacion?chat=<jid>&desde=<AAAA-MM-DD|ISO>&hasta=<...>&pagina=<n>
-export function crearConversacion({ almacen, vigilados, nombrePara, version, dirReportes }) {
+export function crearConversacion({ almacen, vigilados, nombrePara, nombres, version, dirReportes }) {
   return async function conversacion({ ruta }) {
     const q = new URL(String(ruta), 'http://local').searchParams;
     const chat = q.get('chat');
@@ -266,7 +277,9 @@ export function crearConversacion({ almacen, vigilados, nombrePara, version, dir
     let pagina = Number.parseInt(q.get('pagina') ?? '1', 10);
     if (!Number.isInteger(pagina) || pagina < 1) pagina = 1;
     pagina = Math.min(pagina, totalPaginas);
-    const mensajes = todos.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+    // Nombres reales en lugar de números internos; si Evolution no responde se muestra un rastro corto.
+    const mapaNombres = await Promise.resolve(nombres?.()).catch(() => undefined);
+    const mensajes = conNombres(todos.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA), mapaNombres);
 
     for (const m of mensajes) {
       if ((m.tipo !== 'audio' && m.tipo !== 'imagen') || m.sinMedio || !ID_MEDIO.test(String(m.mediaId ?? ''))) continue;
