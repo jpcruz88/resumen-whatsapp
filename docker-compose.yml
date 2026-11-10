@@ -23,7 +23,7 @@ services:
       retries: 10
 
   evolution-api:
-    image: evoapicloud/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: resumen-whatsapp-evolution
     restart: unless-stopped
     depends_on:

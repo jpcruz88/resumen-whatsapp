@@ -7,9 +7,9 @@ se puede ver con Evolution, Gemini y Cloudflare reales. Hazlos en este orden.
 
 1. `cp .env.example .env` y llena todas las variables. Genera valores propios para
    `SECRETO_WEBHOOK`, `EVOLUTION_API_KEY` y `EVOLUTION_DB_PASSWORD`.
-2. Decide la versión fija de la imagen de Evolution y cámbiala en `docker-compose.yml`
-   (hoy dice `latest`, que no es reproducible).
-3. `docker compose config` debe terminar sin errores (aún no se validó en esta Mac).
+2. La imagen de Evolution está fijada a `v2.3.7` en `docker-compose.yml`. Si la subes de
+   versión, vuelve a probar el paso 3 completo.
+3. `docker compose config -q` debe terminar sin errores (validado con Docker Compose 5.x).
 
 ## 2. Gemini acepta audio e imagen (lo que más puede fallar)
 
