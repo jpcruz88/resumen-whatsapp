@@ -4,10 +4,13 @@ import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { parsearEventoEvolution } from './parse.js';
-import { resumir } from './resumen.js';
 import { Almacen } from './almacen.js';
 import { Vigilados } from './vigilados.js';
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { crearPanel } from './panel.js';
+import { crearClienteEvolution } from './evolution.js';
+import { generarReporte } from './reportar.js';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -15,7 +18,7 @@ function igual(a, b) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-export function crearManejador({ almacen, secreto, resumirFn }) {
+export function crearManejador({ almacen, secreto }) {
   return async function manejar({ metodo, ruta, cabeceras = {}, cuerpo }) {
     if (!igual(cabeceras.apikey, secreto)) return { estado: 401, cuerpo: { error: 'no autorizado' } };
 
@@ -25,15 +28,30 @@ export function crearManejador({ almacen, secreto, resumirFn }) {
       return { estado: 200, cuerpo: { ok: true } };
     }
 
-    if (metodo === 'GET' && ruta.startsWith('/resumen')) {
-      const q = new URL(ruta, 'http://local').searchParams;
-      const chat = q.get('chat');
-      const mensajes = await almacen.leer({ chat, desde: q.get('desde'), hasta: q.get('hasta') });
-      const texto = await resumirFn({ mensajes });
-      return { estado: 200, cuerpo: { texto, mensajes: mensajes.length } };
-    }
-
     return { estado: 404, cuerpo: { error: 'no encontrado' } };
+  };
+}
+
+// Sirve un reporte guardado. El id solo admite hex y guiones: sin traversal.
+export async function servirReporte({ dirReportes, id }) {
+  if (!/^[a-f0-9-]+$/.test(String(id ?? ''))) return { estado: 404, cuerpo: { error: 'no encontrado' } };
+  try {
+    return { estado: 200, html: await readFile(join(dirReportes, `${id}.html`), 'utf8') };
+  } catch {
+    return { estado: 404, cuerpo: { error: 'no encontrado' } };
+  }
+}
+
+// El webhook exige apikey; el panel y los reportes van por el tunel con Access.
+export function crearRouter({ webhook, panel, dirReportes }) {
+  return async function enrutar(peticion) {
+    const { metodo, ruta } = peticion;
+    const camino = ruta.split('?')[0];
+    if (camino === '/webhook/evolution') return webhook(peticion);
+    if (metodo === 'GET' && camino.startsWith('/reportes/')) {
+      return servirReporte({ dirReportes, id: camino.slice('/reportes/'.length) });
+    }
+    return panel({ ...peticion, ruta: camino });
   };
 }
 
@@ -48,10 +66,22 @@ export async function arrancar(env = process.env) {
   const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
   for (const c of chats) await vigilados.activar(c);
   const almacen = new Almacen({ dir, vigilados });
-  const manejar = crearManejador({
-    almacen,
-    secreto: env.SECRETO_WEBHOOK,
-    resumirFn: ({ mensajes }) => resumir({ mensajes, apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }),
+  const dirReportes = env.REPORTES_DIR ?? join(dir, 'reportes');
+  const medios = { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL };
+  const evolution = crearClienteEvolution({
+    url: env.EVOLUTION_URL,
+    apiKey: env.EVOLUTION_API_KEY,
+    instancia: env.EVOLUTION_INSTANCIA,
+  });
+  const manejar = crearRouter({
+    webhook: crearManejador({ almacen, secreto: env.SECRETO_WEBHOOK }),
+    panel: crearPanel({
+      vigilados,
+      evolution,
+      generar: ({ chat, desde, hasta }) =>
+        generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes }),
+    }),
+    dirReportes,
   });
 
   const servidor = createServer(async (req, res) => {
@@ -71,8 +101,13 @@ export async function arrancar(env = process.env) {
         cabeceras: req.headers,
         cuerpo: json,
       });
-      res.writeHead(r.estado, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(r.cuerpo));
+      if (r.html !== undefined) {
+        res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8' });
+        res.end(r.html);
+      } else {
+        res.writeHead(r.estado, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(r.cuerpo));
+      }
     } catch (err) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));

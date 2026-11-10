@@ -199,7 +199,7 @@ test('webhook guarda el mensaje cuando el secreto es correcto', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
     const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
-    const manejar = crearManejador({ almacen, secreto: 'S3CRETO', resumirFn: async () => '' });
+    const manejar = crearManejador({ almacen, secreto: 'S3CRETO' });
     const r = await manejar({
       metodo: 'POST',
       ruta: '/webhook/evolution',
@@ -217,7 +217,7 @@ test('webhook rechaza un secreto incorrecto', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
   try {
     const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
-    const manejar = crearManejador({ almacen, secreto: 'S3CRETO', resumirFn: async () => '' });
+    const manejar = crearManejador({ almacen, secreto: 'S3CRETO' });
     const r = await manejar({
       metodo: 'POST',
       ruta: '/webhook/evolution',
@@ -226,28 +226,6 @@ test('webhook rechaza un secreto incorrecto', async () => {
     });
     assert.equal(r.estado, 401);
     assert.equal((await almacen.leer({ chat: CHAT_OK })).length, 0);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('GET /resumen devuelve el resumen del periodo pedido', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'resumen-'));
-  try {
-    const almacen = new Almacen({ dir, vigilados: await vigilando(dir, CHAT_OK) });
-    await almacen.guardar(parsearEventoEvolution(evento(CHAT_OK, 'mandame 3 facturas', { id: 'r1' })));
-    const manejar = crearManejador({
-      almacen,
-      secreto: 'S3CRETO',
-      resumirFn: async ({ mensajes }) => `resumen de ${mensajes.length} mensaje(s)`,
-    });
-    const r = await manejar({
-      metodo: 'GET',
-      ruta: `/resumen?chat=${encodeURIComponent(CHAT_OK)}`,
-      cabeceras: { apikey: 'S3CRETO' },
-    });
-    assert.equal(r.estado, 200);
-    assert.equal(r.cuerpo.texto, 'resumen de 1 mensaje(s)');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
