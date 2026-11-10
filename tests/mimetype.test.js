@@ -74,3 +74,61 @@ test('sin mimetype parseado se usa el de Evolution al guardar y reportar igual l
     assert.equal(envio.contents[0].parts.find((p) => p.inlineData).inlineData.mimeType, 'audio/ogg');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- descarga bajo demanda al generar el reporte ----------
+
+async function conAudioSinArchivo(evolutionFn) {
+  const evolution = { descargas: [], descargarMedia: async (...a) => { evolution.descargas.push(a); return evolutionFn(); } };
+  const m = await montar(null); // el webhook no descarga: simula una descarga fallida
+  await m.almacen.guardar({ id: 'AUD9', chat: CHAT, tipo: 'audio', texto: null, mediaId: 'AUD9', mimetype: 'audio/ogg; codecs=opus', fecha: new Date().toISOString(), propio: false });
+  return { ...m, evolution };
+}
+
+test('archivo ausente: reportar lo descarga una vez con el mismo mediaId y lo procesa', async () => {
+  const { dir, evolution, reportar } = await conAudioSinArchivo(async () => ({ buffer: Buffer.from('opus'), mimetype: 'audio/ogg' }));
+  try {
+    const { fetchFn } = await reportar({ evolution });
+    assert.deepEqual(evolution.descargas, [['AUD9', CHAT]]);
+    const envio = fetchFn.cuerpos.map((b) => JSON.parse(b)).find((b) => b.contents[0].parts.some((p) => p.inlineData));
+    assert.ok(envio, 'Gemini debe recibir la peticion de transcripcion');
+    assert.equal(await readFile(join(dir, 'media', 'AUD9.ogg'), 'utf8'), 'opus');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('el resumen recibe la transcripcion del audio descargado bajo demanda', async () => {
+  const { dir, evolution, reportar } = await conAudioSinArchivo(async () => ({ buffer: Buffer.from('opus'), mimetype: 'audio/ogg' }));
+  try {
+    const { fetchFn } = await reportar({ evolution });
+    const resumen = fetchFn.cuerpos.map((b) => JSON.parse(b)).find((b) => b.generationConfig);
+    assert.match(resumen.contents[0].parts[0].text, /contacto: transcripcion de prueba/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('si la descarga bajo demanda falla: "no se pudo procesar" y no se registra el error', async () => {
+  const { dir, evolution, reportar } = await conAudioSinArchivo(async () => { throw new Error('boom http://evo/x?apikey=LLAVE123'); });
+  const logs = [];
+  const orig = { error: console.error, log: console.log, warn: console.warn };
+  console.error = console.log = console.warn = (...a) => logs.push(a.join(' '));
+  try {
+    const { fetchFn } = await reportar({ evolution });
+    const resumen = fetchFn.cuerpos.map((b) => JSON.parse(b)).find((b) => b.generationConfig);
+    assert.match(resumen.contents[0].parts[0].text, /no se pudo procesar/);
+    assert.equal(evolution.descargas.length, 1);
+  } finally {
+    Object.assign(console, orig);
+    await rm(dir, { recursive: true, force: true });
+  }
+  assert.ok(!logs.join('\n').includes('LLAVE123'));
+  assert.ok(!logs.join('\n').includes('boom'));
+});
+
+test('con transcripcion en cache no se descarga aunque falte el archivo', async () => {
+  const { dir, almacen, evolution, reportar } = await conAudioSinArchivo(async () => ({ buffer: Buffer.from('x'), mimetype: 'audio/ogg' }));
+  try {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(dir, 'media'), { recursive: true });
+    await writeFile(almacen.rutaMedio({ mediaId: 'AUD9', mimetype: 'audio/ogg' }) + '.txt', 'ya transcrito');
+    await reportar({ evolution });
+    assert.equal(evolution.descargas.length, 0);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

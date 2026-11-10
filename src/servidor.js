@@ -89,7 +89,7 @@ export async function arrancar(env = process.env) {
       vigilados,
       evolution,
       generar: ({ chat, desde, hasta }) =>
-        generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes }),
+        generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }),
     }),
     dirReportes,
     hosts: [`127.0.0.1:${puerto}`, `localhost:${puerto}`, ...cfg.panelHosts],

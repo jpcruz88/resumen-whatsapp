@@ -6,6 +6,7 @@ import { Almacen } from './almacen.js';
 import { Vigilados } from './vigilados.js';
 import { leerConfig } from './config.js';
 import { generarReporte as generarReal } from './reportar.js';
+import { crearClienteEvolution } from './evolution.js';
 import { inicioDelDia, finDelDia } from './fechas.js';
 
 function leerArgs(argv) {
@@ -29,6 +30,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, { ge
     vigilados,
     medios: { apiKey: cfg.geminiKey, model: cfg.geminiModel },
     dirReportes: join(cfg.datosDir, 'reportes'),
+    evolution: crearClienteEvolution(cfg.evolution),
   });
   return `http://127.0.0.1:${cfg.puerto}/reportes/${id}`;
 }
