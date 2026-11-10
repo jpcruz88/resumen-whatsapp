@@ -11,7 +11,8 @@ function pagina(chats, vigilados) {
       const jid = escaparHtml(c.jid);
       const nombre = escaparHtml(c.nombre || c.jid);
       const marcado = vigilados.includes(c.jid) ? ' checked' : '';
-      return `<tr><td><input type="checkbox" data-chat="${jid}"${marcado}></td><td>${nombre}</td><td><code>${jid}</code></td></tr>`;
+      const buscar = escaparHtml(`${c.nombre || ''} ${c.jid}`);
+      return `<tr data-buscar="${buscar}"><td><input type="checkbox" data-chat="${jid}"${marcado}></td><td>${nombre}</td><td><code>${jid}</code></td></tr>`;
     })
     .join('\n');
   const opciones = chats
@@ -26,6 +27,7 @@ function pagina(chats, vigilados) {
 </head>
 <body>
 <h1>Chats</h1>
+<input type="search" id="buscar" placeholder="Buscar por nombre o JID" autocomplete="off">
 <table>
 <thead><tr><th>Vigilar</th><th>Chat</th><th>JID</th></tr></thead>
 <tbody>
@@ -43,6 +45,14 @@ ${opciones}
 </form>
 <p id="estado"></p>
 <script>
+// Filtro local: sin red. Ignora mayúsculas y acentos.
+const sinAcentos = (t) => String(t).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();
+const filas = Array.from(document.querySelectorAll('tbody tr[data-buscar]'));
+const indice = filas.map((f) => sinAcentos(f.dataset.buscar));
+document.getElementById('buscar').addEventListener('input', (e) => {
+  const q = sinAcentos(e.target.value.trim());
+  filas.forEach((f, i) => { f.hidden = q !== '' && !indice[i].includes(q); });
+});
 document.querySelectorAll('input[data-chat]').forEach((el) => {
   el.addEventListener('change', async () => {
     await fetch('/vigilar', { method: 'POST', headers: { 'content-type': 'application/json' },

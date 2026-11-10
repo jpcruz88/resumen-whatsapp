@@ -157,3 +157,31 @@ test('servirReporte sigue rechazando traversal, barras, % y mayusculas', async (
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- buscador de la lista ----------
+test('GET / trae un buscador y cada fila lleva en data-buscar el nombre y el JID escapados', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const r = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(r.html, /<input[^>]*type="search"[^>]*id="buscar"/);
+    assert.ok(r.html.indexOf('id="buscar"') < r.html.indexOf('<table'));
+    const fila = r.html.match(/<tr[^>]*data-buscar="([^"]*)"[^>]*>/);
+    assert.ok(fila, 'la fila debe llevar data-buscar');
+    assert.ok(fila[1].includes('Ana &lt;b&gt;&amp; Co'));
+    assert.ok(fila[1].includes(JID));
+    assert.ok(!r.html.includes('<b>&'));
+    assert.match(r.html, /normalize\('NFD'\)/);
+    // El escape debe llegar al navegador como texto \u0300, no como el carácter ya resuelto.
+    assert.ok(r.html.includes(String.raw`[\u0300-\u036f]`));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / escapa comillas del nombre en data-buscar', async () => {
+  const { dir, panel } = await montar({
+    evolution: { listarChats: async () => [{ jid: JID, nombre: 'x" onmouseover="alert(1)' }] },
+  });
+  try {
+    const r = await panel({ metodo: 'GET', ruta: '/' });
+    assert.ok(!r.html.includes('x" onmouseover'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
