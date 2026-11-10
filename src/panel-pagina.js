@@ -167,7 +167,15 @@ const JS = String.raw`
       otra.focus(); mostrar(otra.dataset.vista);
     });
   });
-  $$('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrar(b.dataset.ir)));
+  // "Elegir chats": cambia de pestaña y deja el cursor en el buscador. En pantalla ancha las dos vistas
+  // ya están visibles, así que sin el foco el botón parecería no hacer nada.
+  $$('[data-ir]').forEach((b) => b.addEventListener('click', () => {
+    mostrar(b.dataset.ir);
+    if (b.dataset.ir === 'chats') {
+      entrada.focus();
+      entrada.scrollIntoView({ block: 'center' });
+    }
+  }));
   const hash = location.hash.slice(1);
   mostrar(hash === 'resumen' || hash === 'chats' ? hash : (cuenta() > 0 ? 'resumen' : 'chats'));
 

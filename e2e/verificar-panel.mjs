@@ -119,10 +119,30 @@ await foto('09-escritorio-oscuro');
 informe.pestanasVisiblesEnEscritorio = await js("getComputedStyle(document.querySelector('.pestanas')).display");
 informe.panelesVisiblesEnEscritorio = await js("[...document.querySelectorAll('.panel')].map(p=>getComputedStyle(p).display).join(',')");
 
+if (vacio) {
+  // El botón "Elegir chats" del estado vacío debe llevar al buscador y dejarlo listo para escribir.
+  const enBuscador = "document.activeElement && document.activeElement.id";
+  const buscadorALaVista = "(() => { const r = document.querySelector('#buscar').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()";
+  await ir(nueva(), { ...cel, oscuro: false });
+  await js("document.querySelector('#t-resumen').click()"); await dormir(200);
+  await js("document.querySelector('[data-ir=\"chats\"]').click()"); await dormir(500);
+  await foto('11-movil-elegir-chats');
+  informe.elegirChatsMovilPestana = await js("document.querySelector('[role=tab][aria-selected=true]').textContent");
+  informe.elegirChatsMovilFoco = await js(enBuscador);
+  informe.elegirChatsMovilALaVista = await js(buscadorALaVista);
+  await ir(nueva(), { ...mac, oscuro: false });
+  await js("document.querySelector('[data-ir=\"chats\"]').click()"); await dormir(500);
+  await foto('12-escritorio-elegir-chats');
+  informe.elegirChatsEscritorioFoco = await js(enBuscador);
+  informe.elegirChatsEscritorioALaVista = await js(buscadorALaVista);
+}
+
 chrome.kill(); srv.close();
 const esperado = vacio
   ? { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, pestanaInicial: 'Chats',
-      pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block' }
+      pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block',
+      elegirChatsMovilPestana: 'Chats', elegirChatsMovilFoco: 'buscar', elegirChatsMovilALaVista: true,
+      elegirChatsEscritorioFoco: 'buscar', elegirChatsEscritorioALaVista: true }
   : { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, coincidenciasVisibles: 30,
       vigiladosAntes: 3, vigiladosDespues: 4, cuentaTexto: '4', opcionesSelector: 4, botonDuranteCarga: true,
       enlaceReporte: '/reportes/demo', rangoVisible: true, pestanaInicial: 'Resumen',
