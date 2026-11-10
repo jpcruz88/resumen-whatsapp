@@ -96,3 +96,14 @@ test('fallo de red: también lanza el error en español con cause', async () => 
     );
   });
 });
+
+test('envía a Gemini el mimetype base, sin parámetros (audio/ogg; codecs=opus -> audio/ogg)', async () => {
+  await conArchivo(async (ruta) => {
+    const f = fakeFetch('ok');
+    await procesarMedio({
+      tipo: 'audio', ruta, mimetype: 'audio/ogg; codecs=opus', apiKey: 'K', model: 'm', fetchFn: f,
+    });
+    const inline = f.llamadas[0].body.contents[0].parts.find((p) => p.inlineData).inlineData;
+    assert.equal(inline.mimeType, 'audio/ogg');
+  });
+});

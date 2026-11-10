@@ -32,7 +32,7 @@ export async function procesarMedio({
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mimetype, data: datos } }] }],
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: String(mimetype || '').split(';')[0].trim(), data: datos } }] }],
       }),
     });
     if (!res.ok) throw new Error(`Gemini respondió ${res.status}`);
