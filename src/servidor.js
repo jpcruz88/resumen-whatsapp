@@ -43,11 +43,19 @@ export async function servirReporte({ dirReportes, id }) {
 }
 
 // El webhook exige apikey; el panel y los reportes van por el tunel con Access.
-export function crearRouter({ webhook, panel, dirReportes }) {
+// Defensa contra CSRF y DNS rebinding en las rutas del panel (no aplica al webhook).
+export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
+  const permitidos = new Set(hosts.map((h) => h.toLowerCase()));
   return async function enrutar(peticion) {
-    const { metodo, ruta } = peticion;
+    const { metodo, ruta, cabeceras = {} } = peticion;
     const camino = ruta.split('?')[0];
     if (camino === '/webhook/evolution') return webhook(peticion);
+    if (!permitidos.has(String(cabeceras.host ?? '').toLowerCase())) {
+      return { estado: 403, cuerpo: { error: 'host no permitido' } };
+    }
+    if (metodo === 'POST' && !String(cabeceras['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+      return { estado: 415, cuerpo: { error: 'se requiere application/json' } };
+    }
     if (metodo === 'GET' && camino.startsWith('/reportes/')) {
       return servirReporte({ dirReportes, id: camino.slice('/reportes/'.length) });
     }
@@ -66,6 +74,7 @@ export async function arrancar(env = process.env) {
   const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
   for (const c of chats) await vigilados.activar(c);
   const almacen = new Almacen({ dir, vigilados });
+  const puerto = Number(env.PUERTO ?? 3100);
   const dirReportes = env.REPORTES_DIR ?? join(dir, 'reportes');
   const medios = { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL };
   const evolution = crearClienteEvolution({
@@ -82,6 +91,11 @@ export async function arrancar(env = process.env) {
         generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes }),
     }),
     dirReportes,
+    hosts: [
+      `127.0.0.1:${puerto}`,
+      `localhost:${puerto}`,
+      ...(env.PANEL_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean),
+    ],
   });
 
   const servidor = createServer(async (req, res) => {
@@ -114,7 +128,6 @@ export async function arrancar(env = process.env) {
     }
   });
 
-  const puerto = Number(env.PUERTO ?? 3100);
   servidor.listen(puerto, '127.0.0.1', () => console.log(`escuchando en 127.0.0.1:${puerto}`));
   return servidor;
 }

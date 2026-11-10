@@ -87,3 +87,40 @@ test('GET /reportes/:id sirve el HTML guardado; 404 si no existe o es invalido',
     assert.equal((await servirReporte({ dirReportes: dir, id: '' })).estado, 404);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- router: proteccion de rutas del panel ----------
+import { crearRouter } from '../src/servidor.js';
+
+function router() {
+  const webhook = async () => ({ estado: 200, cuerpo: { ok: true } });
+  const panel = async () => ({ estado: 200, cuerpo: { ok: true } });
+  return crearRouter({ webhook, panel, dirReportes: '/nada', hosts: ['127.0.0.1:3100', 'localhost:3100', 'panel.ejemplo.com'] });
+}
+const JSON_CT = 'application/json';
+
+test('POST /vigilar con content-type text/plain responde 415', async () => {
+  const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host: '127.0.0.1:3100', 'content-type': 'text/plain' }, cuerpo: {} });
+  assert.equal(r.estado, 415);
+});
+
+test('POST /vigilar con Host ajeno responde 403', async () => {
+  const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host: 'evil.example', 'content-type': JSON_CT }, cuerpo: {} });
+  assert.equal(r.estado, 403);
+});
+
+test('GET / con Host ajeno responde 403', async () => {
+  const r = await router()({ metodo: 'GET', ruta: '/', cabeceras: { host: 'evil.example' } });
+  assert.equal(r.estado, 403);
+});
+
+test('POST /vigilar con JSON y Host permitido procede', async () => {
+  for (const host of ['127.0.0.1:3100', 'panel.ejemplo.com']) {
+    const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host, 'content-type': 'application/json; charset=utf-8' }, cuerpo: {} });
+    assert.equal(r.estado, 200);
+  }
+});
+
+test('POST /webhook/evolution con Host de Docker sigue funcionando', async () => {
+  const r = await router()({ metodo: 'POST', ruta: '/webhook/evolution', cabeceras: { host: 'host.docker.internal:3100', apikey: 'x' }, cuerpo: {} });
+  assert.equal(r.estado, 200);
+});
