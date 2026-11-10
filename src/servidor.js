@@ -19,13 +19,21 @@ function igual(a, b) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-export function crearManejador({ almacen, secreto }) {
+export function crearManejador({ almacen, secreto, evolution }) {
   return async function manejar({ metodo, ruta, cabeceras = {}, cuerpo }) {
     if (!igual(cabeceras.apikey, secreto)) return { estado: 401, cuerpo: { error: 'no autorizado' } };
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
       const m = parsearEventoEvolution(cuerpo);
-      if (m) await almacen.guardar(m);
+      if (m && (await almacen.guardar(m)) && evolution && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+        try {
+          const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, m.chat);
+          await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: mimetype || m.mimetype, buffer });
+        } catch {
+          // No se registra el texto del error: puede contener URLs o claves.
+          console.error('descarga de medio fallida', m.mediaId);
+        }
+      }
       return { estado: 200, cuerpo: { ok: true } };
     }
 
@@ -75,7 +83,7 @@ export async function arrancar(env = process.env) {
   const medios = { apiKey: cfg.geminiKey, model: cfg.geminiModel };
   const evolution = crearClienteEvolution(cfg.evolution);
   const manejar = crearRouter({
-    webhook: crearManejador({ almacen, secreto: cfg.secreto }),
+    webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
     panel: crearPanel({
       vigilados,
       evolution,
