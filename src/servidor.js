@@ -41,9 +41,9 @@ export function crearManejador({ almacen, secreto, evolution }) {
   };
 }
 
-// Sirve un reporte guardado. El id solo admite hex y guiones: sin traversal.
+// Sirve un reporte guardado. El id solo admite [a-z0-9-] (base36 + hash hex): sin traversal.
 export async function servirReporte({ dirReportes, id }) {
-  if (!/^[a-f0-9-]+$/.test(String(id ?? ''))) return { estado: 404, cuerpo: { error: 'no encontrado' } };
+  if (!/^[a-z0-9-]+$/.test(String(id ?? ''))) return { estado: 404, cuerpo: { error: 'no encontrado' } };
   try {
     return { estado: 200, html: await readFile(join(dirReportes, `${id}.html`), 'utf8') };
   } catch {

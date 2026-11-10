@@ -124,3 +124,32 @@ test('POST /webhook/evolution con Host de Docker sigue funcionando', async () =>
   const r = await router()({ metodo: 'POST', ruta: '/webhook/evolution', cabeceras: { host: 'host.docker.internal:3100', apikey: 'x' }, cuerpo: {} });
   assert.equal(r.estado, 200);
 });
+
+// ---------- ids generados por guardarReporte ----------
+import { guardarReporte } from '../src/reporte.js';
+
+test('un reporte recien guardado se sirve por el router (id generado pasa la validacion)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rep-id-'));
+  try {
+    const id = await guardarReporte({ dir, html: '<p>listo</p>' });
+    const enrutar = crearRouter({
+      webhook: async () => ({ estado: 200, cuerpo: {} }),
+      panel: async () => ({ estado: 200, cuerpo: {} }),
+      dirReportes: dir,
+      hosts: ['127.0.0.1:3100'],
+    });
+    const r = await enrutar({ metodo: 'GET', ruta: `/reportes/${id}`, cabeceras: { host: '127.0.0.1:3100' } });
+    assert.equal(r.estado, 200);
+    assert.equal(r.html, '<p>listo</p>');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('servirReporte sigue rechazando traversal, barras, % y mayusculas', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rep-id-'));
+  try {
+    await writeFile(join(dir, 'abc-1.html'), 'x');
+    for (const id of ['..', '../abc-1', 'a/b', 'a%2Fb', 'ABC-1', 'abc 1']) {
+      assert.equal((await servirReporte({ dirReportes: dir, id })).estado, 404, id);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
