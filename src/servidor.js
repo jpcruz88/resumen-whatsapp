@@ -25,13 +25,20 @@ export function crearManejador({ almacen, secreto, evolution }) {
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
       const m = parsearEventoEvolution(cuerpo);
-      if (m && (await almacen.guardar(m)) && evolution && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+      if (m && (await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+        // Con webhook.base64 el medio viaja en el payload: no se descarga nada de Evolution.
+        const embebido = m.base64 ? Buffer.from(m.base64, 'base64') : null;
         try {
-          // El mimetype parseado manda (reportar lo usa para leer); el de Evolution es el respaldo.
-          const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, m.chat);
-          await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer });
+          if (embebido && embebido.length > 0) {
+            await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype, buffer: embebido });
+          } else if (evolution) {
+            // Respaldo: sin base64 en el payload. El mimetype parseado manda (reportar lo usa para
+            // leer); el de Evolution es el respaldo.
+            const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, m.chat);
+            await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer });
+          }
         } catch {
-          // No se registra el texto del error: puede contener URLs o claves.
+          // No se registra el texto del error: puede contener URLs, claves o el contenido.
           console.error('descarga de medio fallida', m.mediaId);
         }
       }
