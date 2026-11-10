@@ -80,6 +80,66 @@ export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
   };
 }
 
+// Tope del cuerpo de una petición: los webhooks traen medios en base64.
+export const MAX_CUERPO = 50 * 1024 * 1024;
+
+function responderJson(res, estado, objeto) {
+  res.writeHead(estado, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(objeto));
+}
+
+// Lee el cuerpo como Buffers y lo decodifica una sola vez. Devuelve null si excede el tope.
+async function leerCuerpo(req, maxCuerpo) {
+  const trozos = [];
+  let total = 0;
+  for await (const trozo of req) {
+    total += trozo.length;
+    if (total > maxCuerpo) return null;
+    trozos.push(trozo);
+  }
+  return Buffer.concat(trozos).toString('utf8');
+}
+
+export function crearServidorHttp({ manejar, maxCuerpo = MAX_CUERPO }) {
+  return createServer(async (req, res) => {
+    const declarado = Number(req.headers['content-length']);
+    if (Number.isFinite(declarado) && declarado > maxCuerpo) {
+      res.setHeader('connection', 'close');
+      responderJson(res, 413, { error: 'cuerpo demasiado grande' });
+      return;
+    }
+    const cuerpo = await leerCuerpo(req, maxCuerpo);
+    if (cuerpo === null) {
+      res.setHeader('connection', 'close');
+      responderJson(res, 413, { error: 'cuerpo demasiado grande' });
+      res.on('finish', () => req.destroy());
+      return;
+    }
+    let json;
+    try {
+      json = cuerpo ? JSON.parse(cuerpo) : undefined;
+    } catch {
+      return responderJson(res, 400, { error: 'JSON inválido' });
+    }
+    try {
+      const r = await manejar({
+        metodo: req.method,
+        ruta: req.url,
+        cabeceras: req.headers,
+        cuerpo: json,
+      });
+      if (r.html !== undefined) {
+        res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8' });
+        res.end(r.html);
+      } else {
+        responderJson(res, r.estado, r.cuerpo);
+      }
+    } catch (err) {
+      responderJson(res, 500, { error: err.message });
+    }
+  });
+}
+
 // Arranque real: lee configuración del entorno y escucha en el puerto indicado.
 export async function arrancar(env = process.env) {
   const cfg = leerConfig(env);
@@ -102,35 +162,7 @@ export async function arrancar(env = process.env) {
     hosts: [`127.0.0.1:${puerto}`, `localhost:${puerto}`, ...cfg.panelHosts],
   });
 
-  const servidor = createServer(async (req, res) => {
-    let cuerpo = '';
-    for await (const trozo of req) cuerpo += trozo;
-    let json;
-    try {
-      json = cuerpo ? JSON.parse(cuerpo) : undefined;
-    } catch {
-      res.writeHead(400, { 'content-type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'JSON inválido' }));
-    }
-    try {
-      const r = await manejar({
-        metodo: req.method,
-        ruta: req.url,
-        cabeceras: req.headers,
-        cuerpo: json,
-      });
-      if (r.html !== undefined) {
-        res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(r.html);
-      } else {
-        res.writeHead(r.estado, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(r.cuerpo));
-      }
-    } catch (err) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-  });
+  const servidor = crearServidorHttp({ manejar });
 
   servidor.listen(puerto, '127.0.0.1', () => console.log(`escuchando en 127.0.0.1:${puerto}`));
   return servidor;
