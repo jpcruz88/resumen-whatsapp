@@ -1,0 +1,57 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { generarReporte } from '../src/reportar.js';
+import { Almacen } from '../src/almacen.js';
+
+const CHAT = 'a@g.us';
+
+function fakeFetch({ fallarAudio = false } = {}) {
+  const fn = async (url, opts) => {
+    fn.llamadas.push(opts.body);
+    const esAudio = opts.body.includes('audio/ogg');
+    if (esAudio && fallarAudio) return { ok: false, status: 500, text: async () => 'e', json: async () => ({}) };
+    const texto = esAudio ? 'transcripcion' : '## Trabajo\n- resumen listo';
+    return { ok: true, status: 200, text: async () => '', json: async () => ({ candidates: [{ content: { parts: [{ text: texto }] } }] }) };
+  };
+  fn.llamadas = [];
+  return fn;
+}
+
+async function montar(vigilado) {
+  const base = await mkdtemp(join(tmpdir(), 'rep-'));
+  const vigilados = { esVigilado: async (j) => vigilado && j === CHAT };
+  const almacen = new Almacen({ dir: join(base, 'datos'), vigilados: { esVigilado: async () => true } });
+  return { base, vigilados, almacen };
+}
+
+test('chat no vigilado: rechaza sin leer ni llamar a Gemini', async () => {
+  const { base, vigilados, almacen } = await montar(false);
+  let leyo = false;
+  almacen.leer = async () => { leyo = true; return []; };
+  const fetchFn = fakeFetch();
+  await assert.rejects(
+    () => generarReporte({ chat: CHAT, almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r') }),
+    /chat no vigilado/,
+  );
+  assert.equal(leyo, false);
+  assert.equal(fetchFn.llamadas.length, 0);
+});
+
+test('un audio que falla no impide el reporte y dice "no se pudo procesar"', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: '1', chat: CHAT, tipo: 'audio', texto: '', mediaId: 'M1', mimetype: 'audio/ogg', fecha: '2026-11-09T10:00:00Z', propio: false });
+  await almacen.guardarMedio({ chat: CHAT, mediaId: 'M1', mimetype: 'audio/ogg', buffer: Buffer.from('x') });
+  const fetchFn = fakeFetch({ fallarAudio: true });
+  const { id, url } = await generarReporte({
+    chat: CHAT, desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  assert.ok(url.startsWith('/reportes/'));
+  assert.equal(url, `/reportes/${id}`);
+  assert.ok(fetchFn.llamadas.some((b) => b.includes('no se pudo procesar')));
+  const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
+  assert.ok(html.includes('resumen listo'));
+});
