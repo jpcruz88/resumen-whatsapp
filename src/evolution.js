@@ -1,4 +1,4 @@
-// Cliente mínimo de Evolution API: descarga medios y lista chats. Nunca envía mensajes.
+// Cliente mínimo de Evolution API: descarga medios y lista contactos. Nunca envía mensajes.
 export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch, timeoutMs = 30000 }) {
   async function post(ruta, cuerpo) {
     const r = await fetchFn(`${url}${ruta}/${instancia}`, {
@@ -20,12 +20,31 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
       });
       return { buffer: Buffer.from(d.base64, 'base64'), mimetype: d.mimetype };
     },
+    // Con el historial apagado Evolution no guarda chats (findChats viene vacío): los contactos
+    // son la fuente real. Se unen ambas listas y se quitan grupos, bots y difusiones.
     async listarChats() {
-      const lista = await post('/chat/findChats', {});
-      // En Evolution v2 el JID viene en `remoteJid`; `id` es un id interno de la base.
-      return lista
-        .filter((c) => c.remoteJid && !String(c.remoteJid).endsWith('@g.us'))
-        .map((c) => ({ jid: c.remoteJid, nombre: c.pushName }));
+      const [chats, contactos] = await Promise.all([
+        post('/chat/findChats', {}),
+        post('/chat/findContacts', { where: {} }),
+      ]);
+      const porJid = new Map();
+      for (const c of [...chats, ...contactos]) {
+        const jid = c?.remoteJid;
+        if (!jid || c.isGroup === true) continue;
+        if (!/@(s\.whatsapp\.net|lid)$/.test(jid)) continue;
+        const nombre = c.pushName ?? null;
+        const previo = porJid.get(jid);
+        if (!previo || (previo.nombre == null && nombre != null)) porJid.set(jid, { jid, nombre });
+      }
+      const clave = (n) => String(n ?? '').trim().toLowerCase();
+      // Una misma persona aparece como número y como @lid: se queda el número.
+      const conNumero = new Set();
+      for (const x of porJid.values()) {
+        if (x.jid.endsWith('@s.whatsapp.net') && x.nombre != null) conNumero.add(clave(x.nombre));
+      }
+      return [...porJid.values()]
+        .filter((x) => !(x.jid.endsWith('@lid') && x.nombre != null && conNumero.has(clave(x.nombre))))
+        .sort((a, b) => String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es'));
     },
   };
 }

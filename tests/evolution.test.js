@@ -34,31 +34,103 @@ test('descargarMedia lanza error con el status si no es 2xx', async () => {
   await assert.rejects(() => c.descargarMedia('X', 'c'), /500/);
 });
 
-test('listarChats mapea remoteJid/pushName a jid/nombre (forma real de Evolution v2)', async () => {
-  let llamada;
-  const fetchFn = async (url, opts) => {
-    llamada = { url, opts };
-    return respuesta(200, [
-      { id: 'cm0x1', remoteJid: 'b@s.whatsapp.net', pushName: 'Bea' },
-      { id: null, remoteJid: 'c@s.whatsapp.net', pushName: null },
-    ]);
+// fetch falso que contesta distinto según el endpoint.
+function fetchPorRuta({ chats = [], contactos = [] }, llamadas = []) {
+  return async (url, opts) => {
+    llamadas.push({ url, opts });
+    if (url.includes('/chat/findChats/')) return respuesta(200, chats);
+    if (url.includes('/chat/findContacts/')) return respuesta(200, contactos);
+    return respuesta(404, {});
   };
-  const c = crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'i', fetchFn });
+}
+const contacto = (remoteJid, pushName, extra = {}) => ({
+  id: 'cm0x', remoteJid, pushName, isGroup: false, type: 'contact', ...extra,
+});
+const NUM1 = '5215511111111@s.whatsapp.net';
+const NUM2 = '5215522222222@s.whatsapp.net';
+const LID1 = '111111111111111@lid';
+const LID2 = '222222222222222@lid';
+
+function clienteCon(datos, llamadas) {
+  return crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'i', fetchFn: fetchPorRuta(datos, llamadas) });
+}
+
+test('listarChats consulta findChats y findContacts (POST con where vacío) y mapea a jid/nombre', async () => {
+  const llamadas = [];
+  const c = clienteCon({
+    chats: [{ id: 'cm0x1', remoteJid: NUM1, pushName: 'Cliente Uno' }],
+    contactos: [contacto(NUM2, 'Cliente Dos')],
+  }, llamadas);
   assert.deepEqual(await c.listarChats(), [
-    { jid: 'b@s.whatsapp.net', nombre: 'Bea' },
-    { jid: 'c@s.whatsapp.net', nombre: null },
+    { jid: NUM2, nombre: 'Cliente Dos' },
+    { jid: NUM1, nombre: 'Cliente Uno' },
   ]);
-  assert.equal(llamada.url, 'http://evo/chat/findChats/i');
-  assert.equal(llamada.opts.method, 'POST');
+  const urls = llamadas.map((l) => l.url).sort();
+  assert.deepEqual(urls, ['http://evo/chat/findChats/i', 'http://evo/chat/findContacts/i']);
+  for (const l of llamadas) {
+    assert.equal(l.opts.method, 'POST');
+    assert.equal(l.opts.headers.apikey, 'K');
+  }
+  const cont = llamadas.find((l) => l.url.includes('findContacts'));
+  assert.deepEqual(JSON.parse(cont.opts.body), { where: {} });
 });
 
-test('listarChats descarta los grupos (@g.us)', async () => {
-  const fetchFn = async () => respuesta(200, [
-    { id: 'x1', remoteJid: 'a@g.us', pushName: 'Grupo A' },
-    { id: 'x2', remoteJid: 'b@s.whatsapp.net', pushName: 'Bea' },
+test('listarChats funciona con findChats vacío y findContacts con datos', async () => {
+  const c = clienteCon({ chats: [], contactos: [contacto(NUM1, 'Cliente Uno')] });
+  assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
+});
+
+test('listarChats descarta grupos, isGroup, bots y broadcast', async () => {
+  const c = clienteCon({
+    chats: [{ id: 'x1', remoteJid: 'a@g.us', pushName: 'Grupo A' }],
+    contactos: [
+      contacto('b@g.us', 'Grupo B', { isGroup: true, type: 'group' }),
+      contacto('c@s.whatsapp.net', 'Marcado grupo', { isGroup: true }),
+      contacto('123@bot', 'Bot'),
+      contacto('status@broadcast', 'Estado'),
+      contacto('lista@broadcast', 'Lista'),
+      contacto(NUM1, 'Cliente Uno'),
+    ],
+  });
+  assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
+});
+
+test('listarChats deduplica por jid entre findChats y findContacts', async () => {
+  const c = clienteCon({
+    chats: [{ id: 'k', remoteJid: NUM1, pushName: null }],
+    contactos: [contacto(NUM1, 'Cliente Uno')],
+  });
+  assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
+});
+
+test('listarChats con el mismo nombre en @s.whatsapp.net y @lid conserva solo el número', async () => {
+  const c = clienteCon({
+    contactos: [contacto(LID1, 'Cliente Uno'), contacto(NUM1, 'Cliente Uno')],
+  });
+  assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
+});
+
+test('listarChats conserva un @lid cuyo nombre no tiene versión con número', async () => {
+  const c = clienteCon({
+    contactos: [contacto(LID2, 'Cliente Tres'), contacto(NUM1, 'Cliente Uno'), contacto(LID1, 'Cliente Uno')],
+  });
+  assert.deepEqual(await c.listarChats(), [
+    { jid: LID2, nombre: 'Cliente Tres' },
+    { jid: NUM1, nombre: 'Cliente Uno' },
   ]);
-  const c = crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'i', fetchFn });
-  assert.deepEqual(await c.listarChats(), [{ jid: 'b@s.whatsapp.net', nombre: 'Bea' }]);
+});
+
+test('listarChats ordena por nombre sin distinguir mayúsculas ni acentos', async () => {
+  const c = clienteCon({
+    contactos: [
+      contacto(NUM1, 'zeta'),
+      contacto(NUM2, 'Álvaro'),
+      contacto(LID1, 'beto'),
+      contacto(LID2, 'Ana'),
+    ],
+  });
+  const nombres = (await c.listarChats()).map((x) => x.nombre);
+  assert.deepEqual(nombres, ['Álvaro', 'Ana', 'beto', 'zeta']);
 });
 
 test('guardarMedio escribe media/<id>.<ext> segun mimetype', async () => {
