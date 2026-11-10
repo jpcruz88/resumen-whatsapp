@@ -1,11 +1,13 @@
 // Arma el prompt y llama a Gemini (REST) para separar trabajo y personal.
+import { formatoLocal } from './fechas.js';
+
 const INSTRUCCIONES = `Eres un asistente que resume conversaciones de WhatsApp para su dueño.
 "yo" es el dueño; los demás son sus contactos.
 Responde en español, en este formato exacto:
 
 ## Trabajo
 ### Tareas que me pidieron
-- (tarea, quién la pidió, fecha si aparece). Si no hay, escribe "Ninguna".
+- (tarea, quién la pidió, y la fecha y hora del mensaje donde se pidió, citadas tal cual en la forma [AAAA-MM-DD HH:MM]). Si no hay, escribe "Ninguna".
 ### Temas de trabajo
 - (resumen corto por tema)
 
@@ -29,7 +31,7 @@ function textoDe(m) {
 export function construirPrompt(mensajes) {
   const lineas = mensajes.map((m) => {
     const quien = m.propio ? 'yo' : 'contacto';
-    return `[${m.fecha}] ${quien}: ${textoDe(m)}`;
+    return `[${formatoLocal(m.fecha)}] ${quien}: ${textoDe(m)}`;
   });
   return `${INSTRUCCIONES}\n\nConversación:\n${lineas.join('\n')}`;
 }

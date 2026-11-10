@@ -14,3 +14,11 @@ export function finDelDia(fecha) {
   const [a, m, d] = partes(fecha);
   return new Date(a, m, d, 23, 59, 59, 999).toISOString();
 }
+
+// Marca de tiempo en hora LOCAL como `AAAA-MM-DD HH:MM`. Si no es una fecha válida, devuelve el texto tal cual.
+export function formatoLocal(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const dos = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
+}

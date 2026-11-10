@@ -230,3 +230,26 @@ test('webhook rechaza un secreto incorrecto', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---------- fecha y hora locales en el prompt ----------
+
+test('el prompt muestra cada mensaje con [AAAA-MM-DD HH:MM] en hora local', () => {
+  const utc = new Date('2026-11-08T10:05:00.000Z');
+  const pad = (n) => String(n).padStart(2, '0');
+  const esperado = `[${utc.getFullYear()}-${pad(utc.getMonth() + 1)}-${pad(utc.getDate())} ${pad(utc.getHours())}:${pad(utc.getMinutes())}]`;
+  const p = construirPrompt([{ fecha: utc.toISOString(), propio: false, tipo: 'texto', texto: 'hola' }]);
+  assert.ok(p.includes(`${esperado} contacto: hola`), p);
+  assert.ok(!p.includes('2026-11-08T10:05'), 'no debe quedar el ISO UTC');
+});
+
+test('un mensaje a las 23:30 locales conserva su dia local, no el UTC', () => {
+  const local = new Date(2026, 10, 9, 23, 30);
+  const p = construirPrompt([{ fecha: local.toISOString(), propio: true, tipo: 'texto', texto: 'x' }]);
+  assert.ok(p.includes('[2026-11-09 23:30] yo: x'), p);
+});
+
+test('las instrucciones exigen citar fecha y hora en la misma forma y ya no dicen "fecha si aparece"', () => {
+  const p = construirPrompt([{ fecha: new Date().toISOString(), propio: false, tipo: 'texto', texto: 'hola' }]);
+  assert.match(p, /\[AAAA-MM-DD HH:MM\]/);
+  assert.doesNotMatch(p, /fecha si aparece/i);
+});
