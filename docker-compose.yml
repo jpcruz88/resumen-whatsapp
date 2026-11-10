@@ -52,6 +52,9 @@ services:
       - CACHE_REDIS_ENABLED=false
       - CACHE_LOCAL_ENABLED=true
       - REDIS_ENABLED=false
+      # Tope de QR: sin él Evolution regenera QR y reconecta sin parar si nadie escanea,
+      # y WhatsApp responde rate-overlimit y bloquea nuevas vinculaciones durante horas.
+      - QRCODE_LIMIT=5
       - CONFIG_SESSION_PHONE_CLIENT=ResumenWhatsapp
       - CONFIG_SESSION_PHONE_NAME=ResumenWhatsapp
     volumes:
