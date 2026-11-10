@@ -140,10 +140,34 @@ test('el prompt incluye los mensajes y pide separar trabajo y personal', () => {
   assert.match(p, /Tareas/);
 });
 
+test('el prompt usa la transcripcion del audio y la descripcion de la imagen', () => {
+  const p = construirPrompt([
+    { fecha: 'f1', propio: false, tipo: 'audio', texto: null, textoMedia: 'ocupo la factura del lunes' },
+    { fecha: 'f2', propio: false, tipo: 'imagen', texto: null, textoMedia: 'foto de un recibo por 500 pesos' },
+  ]);
+  assert.match(p, /contacto: ocupo la factura del lunes/);
+  assert.match(p, /contacto: foto de un recibo por 500 pesos/);
+  assert.doesNotMatch(p, /null/);
+});
+
+test('un audio sin textoMedia aparece como no procesado', () => {
+  const p = construirPrompt([{ fecha: 'f1', propio: true, tipo: 'audio', texto: null }]);
+  assert.match(p, /yo: \[audio no procesado\]/);
+  assert.doesNotMatch(p, /null/);
+});
+
+test('el prompt pide las dos categorias y la lista de tareas con fecha', () => {
+  const p = construirPrompt([{ fecha: 'f', propio: false, tipo: 'texto', texto: 'hola' }]);
+  assert.match(p, /## Trabajo/);
+  assert.match(p, /## Personal/);
+  assert.match(p, /### Tareas que me pidieron/);
+  assert.match(p, /fecha/i);
+});
+
 test('resumir llama a Gemini con la clave y devuelve el texto', async () => {
   let pedido;
   const fetchFalso = async (url, opts) => {
-    pedido = { url, body: JSON.parse(opts.body) };
+    pedido = { url, opts, body: JSON.parse(opts.body) };
     return new Response(
       JSON.stringify({ candidates: [{ content: { parts: [{ text: '## Trabajo\n- Entregar 50 copias' }] } }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
@@ -157,7 +181,8 @@ test('resumir llama a Gemini con la clave y devuelve el texto', async () => {
   });
   assert.equal(texto, '## Trabajo\n- Entregar 50 copias');
   assert.match(pedido.url, /models\/gemini-test:generateContent/);
-  assert.match(pedido.url, /key=CLAVE_PRUEBA/);
+  assert.equal(pedido.opts.headers['x-goog-api-key'], 'CLAVE_PRUEBA');
+  assert.doesNotMatch(pedido.url, /CLAVE_PRUEBA|key=/);
   assert.match(pedido.body.contents[0].parts[0].text, /ocupo 50 copias/);
 });
 

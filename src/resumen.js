@@ -15,10 +15,21 @@ Responde en español, en este formato exacto:
 Si un tema es ambiguo, ponlo en Personal y márcalo con (?).
 No inventes nada que no esté en los mensajes.`;
 
+// Texto visible de un mensaje: audio e imagen usan su textoMedia
+// (transcripción o descripción); si no hay nada, se marca como no procesado.
+function textoDe(m) {
+  if (m.tipo === 'audio' || m.tipo === 'imagen') {
+    const partes = [m.texto, m.textoMedia].filter(Boolean);
+    if (partes.length > 0) return partes.join(' | ');
+    return m.tipo === 'audio' ? '[audio no procesado]' : '[imagen no procesada]';
+  }
+  return m.texto ?? '';
+}
+
 export function construirPrompt(mensajes) {
   const lineas = mensajes.map((m) => {
     const quien = m.propio ? 'yo' : 'contacto';
-    return `[${m.fecha}] ${quien}: ${m.texto}`;
+    return `[${m.fecha}] ${quien}: ${textoDe(m)}`;
   });
   return `${INSTRUCCIONES}\n\nConversación:\n${lineas.join('\n')}`;
 }
@@ -32,10 +43,10 @@ export async function resumir({
   if (!mensajes || mensajes.length === 0) {
     return 'No hay mensajes en ese periodo.';
   }
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const res = await fetchFn(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       contents: [{ parts: [{ text: construirPrompt(mensajes) }] }],
       generationConfig: { temperature: 0.2 },
