@@ -27,7 +27,9 @@ export class Almacen {
     const ruta = this.archivo(m.chat);
     const existentes = await this.#ids(ruta);
     if (existentes.has(m.id)) return false;
-    await appendFile(ruta, JSON.stringify(m) + '\n');
+    // El base64 del medio viaja solo en memoria hacia guardarMedio; nunca entra al JSONL.
+    const { base64: _base64, ...paraGuardar } = m;
+    await appendFile(ruta, JSON.stringify(paraGuardar) + '\n');
     return true;
   }
 
