@@ -1,6 +1,13 @@
 // Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista de vigilados.
-import { appendFile, readFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { appendFile, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join, basename } from 'node:path';
+
+const EXTENSIONES = {
+  'audio/ogg': 'ogg',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 import { createHash } from 'node:crypto';
 
 export class Almacen {
@@ -22,6 +29,18 @@ export class Almacen {
     if (existentes.has(m.id)) return false;
     await appendFile(ruta, JSON.stringify(m) + '\n');
     return true;
+  }
+
+  // Guarda el archivo de un mensaje de un chat vigilado en <dir>/media/<mediaId>.<ext>.
+  async guardarMedio({ chat, mediaId, mimetype, buffer }) {
+    if (!(await this.vigilados.esVigilado(chat))) return null;
+    const base = String(mimetype || '').split(';')[0].trim().toLowerCase();
+    const ext = EXTENSIONES[base] ?? 'bin';
+    const carpeta = join(this.dir, 'media');
+    await mkdir(carpeta, { recursive: true });
+    const ruta = join(carpeta, `${basename(String(mediaId))}.${ext}`);
+    await writeFile(ruta, buffer);
+    return ruta;
   }
 
   async leer({ chat, desde, hasta }) {
