@@ -60,3 +60,24 @@ test('content-length declarado sobre el tope devuelve 413 sin leer ni llamar al 
     assert.equal(llamadas(), 0);
   });
 });
+
+test('las respuestas HTML y JSON llevan Cache-Control: no-store (el panel y los reportes son privados)', async () => {
+  const manejar = async ({ ruta }) =>
+    ruta === '/pagina' ? { estado: 200, html: '<p>hola</p>' } : { estado: 200, cuerpo: { ok: true } };
+  const servidor = crearServidorHttp({ manejar });
+  await new Promise((r) => servidor.listen(0, '127.0.0.1', r));
+  const { port } = servidor.address();
+  const pedir = (path) => new Promise((resolve, reject) => {
+    request({ host: '127.0.0.1', port, method: 'GET', path }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.headers));
+    }).on('error', reject).end();
+  });
+  try {
+    assert.equal((await pedir('/pagina'))['cache-control'], 'no-store');
+    assert.equal((await pedir('/datos'))['cache-control'], 'no-store');
+  } finally {
+    servidor.closeAllConnections?.();
+    await new Promise((r) => servidor.close(r));
+  }
+});

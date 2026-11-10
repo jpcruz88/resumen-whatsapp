@@ -87,7 +87,7 @@ export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
 export const MAX_CUERPO = 50 * 1024 * 1024;
 
 function responderJson(res, estado, objeto) {
-  res.writeHead(estado, { 'content-type': 'application/json' });
+  res.writeHead(estado, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(objeto));
 }
 
@@ -132,7 +132,7 @@ export function crearServidorHttp({ manejar, maxCuerpo = MAX_CUERPO }) {
         cuerpo: json,
       });
       if (r.html !== undefined) {
-        res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8' });
+        res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
         responderJson(res, r.estado, r.cuerpo);
