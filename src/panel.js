@@ -2,6 +2,7 @@
 // Se alcanza por el tunel de Cloudflare protegido con Access; no usa apikey.
 import { escaparHtml } from './reporte.js';
 import { inicioDelDia, finDelDia } from './fechas.js';
+import pkg from '../package.json' with { type: 'json' };
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -24,6 +25,7 @@ function pagina(chats, vigilados) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Resumen de WhatsApp</title>
+<style>footer{margin-top:2rem;padding-top:1rem;border-top:1px solid #8884;font-size:.85rem;opacity:.7}</style>
 </head>
 <body>
 <h1>Chats</h1>
@@ -44,6 +46,7 @@ ${opciones}
 <button type="submit">Generar resumen</button>
 </form>
 <p id="estado"></p>
+<footer>Resumen de WhatsApp v${escaparHtml(pkg.version)} · Desarrollado por JP</footer>
 <script>
 // Filtro local: sin red. Ignora mayúsculas y acentos.
 const sinAcentos = (t) => String(t).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();

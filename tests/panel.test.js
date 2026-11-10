@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearPanel } from '../src/panel.js';
@@ -183,5 +183,18 @@ test('GET / escapa comillas del nombre en data-buscar', async () => {
   try {
     const r = await panel({ metodo: 'GET', ruta: '/' });
     assert.ok(!r.html.includes('x" onmouseover'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / muestra en el pie la versión de package.json y "Desarrollado por JP"', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    const r = await panel({ metodo: 'GET', ruta: '/' });
+    assert.equal(r.estado, 200);
+    const pie = r.html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/);
+    assert.ok(pie, 'la página debe tener un <footer>');
+    assert.ok(pie[1].includes(`v${pkg.version}`), `el pie debe incluir v${pkg.version}`);
+    assert.ok(pie[1].includes('Desarrollado por JP'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
