@@ -27,6 +27,10 @@ Si una tarea es para otra persona y no para mí, no la pongas en "Tareas que me 
 // Texto visible de un mensaje: audio e imagen usan su textoMedia
 // (transcripción o descripción); si no hay nada, se marca como no procesado.
 function textoDe(m) {
+  if ((m.tipo === 'audio' || m.tipo === 'imagen') && m.sinMedio) {
+    // Historial de antes de vigilar: el archivo ya no se puede pedir, solo se conserva el texto.
+    return [m.texto, `[${m.tipo === 'audio' ? 'audio' : 'imagen'} anterior a la vigilancia: no disponible]`].filter(Boolean).join(' | ');
+  }
   if (m.tipo === 'audio' || m.tipo === 'imagen') {
     const partes = [m.texto, m.textoMedia].filter(Boolean);
     if (partes.length > 0) return partes.join(' | ');

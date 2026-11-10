@@ -84,3 +84,20 @@ test('sin mensajes el reporte explica desde cuándo se vigila y no llama a Gemin
   const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
   assert.match(html, /Se empezó a vigilar el 9 de noviembre de 2026, 19:56/);
 });
+
+test('un audio anterior a la vigilancia no se transcribe ni se pide a Evolution', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: 'h1', chat: CHAT, tipo: 'audio', texto: null, mediaId: 'MH', mimetype: 'audio/ogg', fecha: '2026-11-09T10:00:00Z', propio: false, sinMedio: true });
+  await almacen.guardar({ id: 'h2', chat: CHAT, tipo: 'texto', texto: 'hola', fecha: '2026-11-09T10:01:00Z', propio: false });
+  const fetchFn = fakeFetch();
+  let descargas = 0;
+  const evolution = { descargarMedia: async () => { descargas++; throw new Error('no está en la base'); } };
+  const { id } = await generarReporte({
+    chat: CHAT, desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, evolution, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  assert.equal(descargas, 0);
+  assert.equal(fetchFn.llamadas.filter((b) => b.includes('audio/ogg')).length, 0, 'no se manda ningún audio a Gemini');
+  assert.ok(fetchFn.llamadas.some((b) => b.includes('[audio anterior a la vigilancia: no disponible]')));
+  await readFile(join(base, 'r', `${id}.html`), 'utf8');
+});

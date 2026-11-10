@@ -3,6 +3,28 @@
 export function parsearEventoEvolution(payload) {
   if (!payload || payload.event !== 'messages.upsert' || !payload.data) return null;
   const d = Array.isArray(payload.data) ? payload.data[0] : payload.data;
+  return normalizar(d);
+}
+
+// Historial que WhatsApp manda al vincular el dispositivo: un lote messages.set con muchos mensajes en el
+// mismo formato que messages.upsert. Los audios e imágenes viejos no traen el archivo y no se pueden
+// pedir después, así que se marcan sinMedio.
+export function parsearHistorial(payload) {
+  if (!payload || payload.event !== 'messages.set' || !Array.isArray(payload.data)) return [];
+  const mensajes = [];
+  for (const d of payload.data) {
+    const m = normalizar(d);
+    if (!m) continue;
+    if (m.tipo !== 'texto') {
+      delete m.base64;
+      m.sinMedio = true;
+    }
+    mensajes.push(m);
+  }
+  return mensajes;
+}
+
+function normalizar(d) {
   if (!d || !d.key || !d.message) return null;
 
   const msg = d.message;

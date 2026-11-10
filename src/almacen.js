@@ -30,6 +30,39 @@ export class Almacen {
     return null;
   }
 
+  // Guarda de una vez un lote (el historial trae miles de mensajes). Una sola lectura de la lista de
+  // vigilados y una por archivo de chat; lo que no es de un chat vigilado se descarta sin escribir nada.
+  // Devuelve cuántos mensajes nuevos guardó.
+  async guardarLote(mensajes) {
+    const vigilados = new Set(await this.vigilados.lista());
+    if (vigilados.size === 0) return 0;
+    const porChat = new Map();
+    for (const m of mensajes) {
+      if (!m) continue;
+      const chat = vigilados.has(m.chat) ? m.chat : m.chatAlt && vigilados.has(m.chatAlt) ? m.chatAlt : null;
+      if (!chat) continue;
+      if (!porChat.has(chat)) porChat.set(chat, []);
+      porChat.get(chat).push({ ...m, chat });
+    }
+    let guardados = 0;
+    for (const [chat, lista] of porChat) {
+      await mkdir(this.dir, { recursive: true });
+      const ruta = this.archivo(chat);
+      const vistos = await this.#ids(ruta);
+      const lineas = [];
+      for (const m of lista) {
+        if (vistos.has(m.id)) continue;
+        vistos.add(m.id);
+        // Mismas reglas que guardar(): ni el base64 ni chatAlt entran al archivo.
+        const { base64: _base64, chatAlt: _chatAlt, ...paraGuardar } = m;
+        lineas.push(JSON.stringify(paraGuardar));
+      }
+      if (lineas.length > 0) await appendFile(ruta, lineas.join('\n') + '\n');
+      guardados += lineas.length;
+    }
+    return guardados;
+  }
+
   async guardar(m) {
     if (!m || !(await this.vigilados.esVigilado(m.chat))) return false;
     await mkdir(this.dir, { recursive: true });

@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 // Solo lectura del chat: nunca envía mensajes a WhatsApp.
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { parsearEventoEvolution } from './parse.js';
+import { parsearEventoEvolution, parsearHistorial } from './parse.js';
 import { Almacen } from './almacen.js';
 import { Vigilados } from './vigilados.js';
 import { join } from 'node:path';
@@ -25,6 +25,13 @@ export function crearManejador({ almacen, secreto, evolution }) {
     if (!igual(cabeceras.apikey, secreto)) return { estado: 401, cuerpo: { error: 'no autorizado' } };
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
+      if (cuerpo?.event === 'messages.set') {
+        // Historial al vincular: solo se guarda el de los chats vigilados; el resto se descarta.
+        const recibidos = parsearHistorial(cuerpo);
+        const guardados = await almacen.guardarLote(recibidos);
+        if (recibidos.length > 0) console.log('historial importado:', guardados, 'de', recibidos.length);
+        return { estado: 200, cuerpo: { ok: true, guardados } };
+      }
       const m = parsearEventoEvolution(cuerpo);
       // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
       const chat = m ? await almacen.resolverChat(m) : null;
@@ -85,7 +92,8 @@ export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
 }
 
 // Tope del cuerpo de una petición: los webhooks traen medios en base64.
-export const MAX_CUERPO = 50 * 1024 * 1024;
+// El historial que manda WhatsApp al vincular llega en lotes de miles de mensajes (con miniaturas).
+export const MAX_CUERPO = 256 * 1024 * 1024;
 
 function responderJson(res, estado, objeto) {
   res.writeHead(estado, { 'content-type': 'application/json', 'cache-control': 'no-store' });
