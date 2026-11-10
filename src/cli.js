@@ -6,6 +6,7 @@ import { Almacen } from './almacen.js';
 import { Vigilados } from './vigilados.js';
 import { leerConfig } from './config.js';
 import { generarReporte as generarReal } from './reportar.js';
+import { inicioDelDia, finDelDia } from './fechas.js';
 
 function leerArgs(argv) {
   const out = {};
@@ -22,8 +23,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, { ge
   const almacen = new Almacen({ dir: cfg.datosDir, vigilados });
   const { id } = await generarReporte({
     chat: a.chat,
-    desde: a.desde ? new Date(a.desde).toISOString() : undefined,
-    hasta: a.hasta ? new Date(`${a.hasta}T23:59:59.999`).toISOString() : undefined,
+    desde: a.desde ? inicioDelDia(a.desde) : undefined,
+    hasta: a.hasta ? finDelDia(a.hasta) : undefined,
     almacen,
     vigilados,
     medios: { apiKey: cfg.geminiKey, model: cfg.geminiModel },

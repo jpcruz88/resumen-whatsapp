@@ -70,7 +70,11 @@ test('POST /resumen de chat vigilado devuelve la url', async () => {
     const r = await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { chat: JID, desde: '2026-11-01', hasta: '2026-11-02' } });
     assert.equal(r.estado, 200);
     assert.deepEqual(r.cuerpo, { url: '/reportes/abc-1' });
-    assert.deepEqual(llamadas[0], { chat: JID, desde: '2026-11-01', hasta: '2026-11-02' });
+    assert.deepEqual(llamadas[0], {
+      chat: JID,
+      desde: new Date(2026, 10, 1, 0, 0, 0, 0).toISOString(),
+      hasta: new Date(2026, 10, 2, 23, 59, 59, 999).toISOString(),
+    });
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

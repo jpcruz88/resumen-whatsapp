@@ -61,8 +61,8 @@ test('cli llama generarReporte y devuelve la URL local', async () => {
     );
     assert.equal(url, 'http://127.0.0.1:3200/reportes/abc-1');
     assert.equal(llamadas[0].chat, 'x@s.whatsapp.net');
-    assert.equal(llamadas[0].desde, new Date('2026-11-02').toISOString());
-    assert.equal(llamadas[0].hasta, new Date('2026-11-09T23:59:59.999').toISOString());
+    assert.equal(llamadas[0].desde, new Date(2026, 10, 2, 0, 0, 0, 0).toISOString());
+    assert.equal(llamadas[0].hasta, new Date(2026, 10, 9, 23, 59, 59, 999).toISOString());
     assert.equal(llamadas[0].dirReportes, join(dir, 'reportes'));
   } finally {
     await rm(dir, { recursive: true, force: true });

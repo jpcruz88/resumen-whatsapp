@@ -1,6 +1,7 @@
 // Panel web: lista chats, marca vigilados y pide reportes.
 // Se alcanza por el tunel de Cloudflare protegido con Access; no usa apikey.
 import { escaparHtml } from './reporte.js';
+import { inicioDelDia, finDelDia } from './fechas.js';
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -87,7 +88,7 @@ export function crearPanel({ vigilados, evolution, generar }) {
         return { estado: 400, cuerpo: { error: 'fechas AAAA-MM-DD requeridas' } };
       }
       if (!(await vigilados.esVigilado(chat))) return { estado: 403, cuerpo: { error: 'chat no vigilado' } };
-      const { url } = await generar({ chat, desde, hasta });
+      const { url } = await generar({ chat, desde: inicioDelDia(desde), hasta: finDelDia(hasta) });
       return { estado: 200, cuerpo: { url } };
     }
 
