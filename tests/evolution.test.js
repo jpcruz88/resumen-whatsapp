@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearClienteEvolution } from '../src/evolution.js';
@@ -63,4 +63,12 @@ test('guardarMedio escribe media/<id>.<ext> segun mimetype', async () => {
     assert.equal(ruta, join(dir, 'media', `M1.${ext}`));
     assert.equal((await readFile(ruta)).toString(), 'xyz');
   }
+});
+
+test('guardarMedio no escribe nada y devuelve null en chat no vigilado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'alm-'));
+  const a = new Almacen({ dir, vigilados: { esVigilado: async () => false } });
+  const ruta = await a.guardarMedio({ chat: 'x', mediaId: 'M2', mimetype: 'image/png', buffer: Buffer.from('abc') });
+  assert.equal(ruta, null);
+  await assert.rejects(() => access(join(dir, 'media')), { code: 'ENOENT' });
 });
