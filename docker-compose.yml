@@ -48,6 +48,9 @@ services:
       - DATABASE_SAVE_DATA_NEW_MESSAGE=false
       - DATABASE_SAVE_DATA_HISTORIC=false
       - DATABASE_SAVE_MESSAGE_UPDATE=false
+      # Sin Redis: Evolution lo intenta usar por defecto y llena el log de errores.
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
       - REDIS_ENABLED=false
       - CONFIG_SESSION_PHONE_CLIENT=ResumenWhatsapp
       - CONFIG_SESSION_PHONE_NAME=ResumenWhatsapp
