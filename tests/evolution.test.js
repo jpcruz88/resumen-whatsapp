@@ -133,6 +133,20 @@ test('listarChats ordena por nombre sin distinguir mayúsculas ni acentos', asyn
   assert.deepEqual(nombres, ['Álvaro', 'Ana', 'beto', 'zeta']);
 });
 
+test('listarChats pone al final los nombres que no empiezan con letra o número', async () => {
+  const c = clienteCon({
+    contactos: [
+      contacto(NUM1, '.'),
+      contacto(NUM2, 'Zeta'),
+      contacto(LID1, '¡Hola'),
+      contacto(LID2, 'Ana'),
+    ],
+  });
+  const nombres = (await c.listarChats()).map((x) => x.nombre);
+  assert.deepEqual(nombres.slice(0, 2), ['Ana', 'Zeta']);
+  assert.deepEqual(new Set(nombres.slice(2)), new Set(['.', '¡Hola']));
+});
+
 test('guardarMedio escribe media/<id>.<ext> segun mimetype', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'alm-'));
   const a = new Almacen({ dir, vigilados: { esVigilado: async () => true } });

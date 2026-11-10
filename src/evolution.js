@@ -1,4 +1,13 @@
 // Cliente mínimo de Evolution API: descarga medios y lista contactos. Nunca envía mensajes.
+// Los nombres que no empiezan con letra o número (".", emojis, signos) van al final: son ruido, no contactos.
+const empiezaConLetra = (n) => /^[\p{L}\p{N}]/u.test(String(n ?? '').trim());
+const porNombre = (a, b) => {
+  const ga = empiezaConLetra(a.nombre) ? 0 : 1;
+  const gb = empiezaConLetra(b.nombre) ? 0 : 1;
+  if (ga !== gb) return ga - gb;
+  return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es');
+};
+
 export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch, timeoutMs = 30000 }) {
   async function post(ruta, cuerpo) {
     const r = await fetchFn(`${url}${ruta}/${instancia}`, {
@@ -44,7 +53,7 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
       }
       return [...porJid.values()]
         .filter((x) => !(x.jid.endsWith('@lid') && x.nombre != null && conNumero.has(clave(x.nombre))))
-        .sort((a, b) => String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es'));
+        .sort(porNombre);
     },
   };
 }

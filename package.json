@@ -1,1 +1,1 @@
-{"name":"resumen-whatsapp","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test tests/","start":"node src/servidor.js","resumen":"node src/cli.js"}}
+{"name":"resumen-whatsapp","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test tests/","start":"node src/servidor.js","resumen":"node src/cli.js","e2e":"node e2e/verificar-panel.mjs"}}

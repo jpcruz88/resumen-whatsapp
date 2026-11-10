@@ -34,15 +34,54 @@ test('GET / lista chats con nombre y JID escapados', async () => {
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('GET / marca como checked el chat vigilado', async () => {
-  const { dir, panel, vigilados } = await montar();
+test('GET / muestra los vigilados en su lista y el selector ofrece solo esos chats', async () => {
+  const otro = '5215599999999@s.whatsapp.net';
+  const { dir, panel, vigilados } = await montar({
+    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana' }, { jid: otro, nombre: 'Beto' }] },
+  });
   try {
     await vigilados.activar(JID);
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(r.html, /checked/);
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    const lista = html.match(/<ul[^>]*id="lista-vigilados"[^>]*>([\s\S]*?)<\/ul>/)[1];
+    assert.ok(lista.includes(JID) && !lista.includes(otro));
+    const resultados = html.match(/<ul[^>]*id="lista-resultados"[^>]*>([\s\S]*?)<\/ul>/)[1];
+    assert.ok(resultados.includes(otro) && !resultados.includes(JID));
+    const selector = html.match(/<select[^>]*id="chat"[^>]*>([\s\S]*?)<\/select>/)[1];
+    assert.ok(selector.includes(JID) && !selector.includes(otro));
+    assert.match(html, /<span id="cuenta-vigilados">1<\/span>/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test('GET / sin chats vigilados explica qué hacer y no ofrece un selector vacío', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(html, /Aún no vigilas ningún chat/);
+    assert.ok(!html.includes('<select'));
+    assert.match(html, /<span id="cuenta-vigilados">0<\/span>/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / es una página móvil y accesible: idioma, viewport, esquema de color y controles con etiqueta', async () => {
+  const { dir, panel, vigilados } = await montar();
+  try {
+    await vigilados.activar(JID);
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(html, /<html lang="es"/);
+    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1/);
+    assert.match(html, /<meta name="color-scheme" content="light dark">/);
+    assert.match(html, /prefers-color-scheme: dark/);
+    assert.match(html, /prefers-reduced-motion: reduce/);
+    assert.match(html, /<label for="chat">/);
+    assert.match(html, /<label for="buscar">/);
+    for (const v of ['hoy', 'ayer', '7dias', 'rango']) {
+      assert.match(html, new RegExp(`<input[^>]*type="radio"[^>]*name="periodo"[^>]*value="${v}"`));
+    }
+    assert.match(html, /<div id="rango"[^>]*hidden/);
+    assert.match(html, /<[^>]*id="estado"[^>]*aria-live="polite"/);
+    assert.ok(!/ on[a-z]+=/.test(html), 'sin manejadores de eventos en línea');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 test('POST /vigilar activa y desactiva', async () => {
   const { dir, panel, vigilados } = await montar();
   try {
@@ -164,8 +203,7 @@ test('GET / trae un buscador y cada fila lleva en data-buscar el nombre y el JID
   try {
     const r = await panel({ metodo: 'GET', ruta: '/' });
     assert.match(r.html, /<input[^>]*type="search"[^>]*id="buscar"/);
-    assert.ok(r.html.indexOf('id="buscar"') < r.html.indexOf('<table'));
-    const fila = r.html.match(/<tr[^>]*data-buscar="([^"]*)"[^>]*>/);
+    const fila = r.html.match(/<li[^>]*data-buscar="([^"]*)"[^>]*>/);
     assert.ok(fila, 'la fila debe llevar data-buscar');
     assert.ok(fila[1].includes('Ana &lt;b&gt;&amp; Co'));
     assert.ok(fila[1].includes(JID));
@@ -175,7 +213,6 @@ test('GET / trae un buscador y cada fila lleva en data-buscar el nombre y el JID
     assert.ok(r.html.includes(String.raw`[\u0300-\u036f]`));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
-
 test('GET / escapa comillas del nombre en data-buscar', async () => {
   const { dir, panel } = await montar({
     evolution: { listarChats: async () => [{ jid: JID, nombre: 'x" onmouseover="alert(1)' }] },
