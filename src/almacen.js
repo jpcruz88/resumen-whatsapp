@@ -31,14 +31,18 @@ export class Almacen {
     return true;
   }
 
-  // Guarda el archivo de un mensaje de un chat vigilado en <dir>/media/<mediaId>.<ext>.
-  async guardarMedio({ chat, mediaId, mimetype, buffer }) {
-    if (!(await this.vigilados.esVigilado(chat))) return null;
+  // Ruta de un medio: <dir>/media/<mediaId>.<ext>. Unico lugar donde vive la convencion.
+  rutaMedio({ mediaId, mimetype }) {
     const base = String(mimetype || '').split(';')[0].trim().toLowerCase();
     const ext = EXTENSIONES[base] ?? 'bin';
-    const carpeta = join(this.dir, 'media');
-    await mkdir(carpeta, { recursive: true });
-    const ruta = join(carpeta, `${basename(String(mediaId))}.${ext}`);
+    return join(this.dir, 'media', `${basename(String(mediaId))}.${ext}`);
+  }
+
+  // Guarda el archivo de un mensaje de un chat vigilado en rutaMedio().
+  async guardarMedio({ chat, mediaId, mimetype, buffer }) {
+    if (!(await this.vigilados.esVigilado(chat))) return null;
+    const ruta = this.rutaMedio({ mediaId, mimetype });
+    await mkdir(join(this.dir, 'media'), { recursive: true });
     await writeFile(ruta, buffer);
     return ruta;
   }

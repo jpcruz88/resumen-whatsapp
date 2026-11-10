@@ -72,3 +72,20 @@ test('guardarMedio no escribe nada y devuelve null en chat no vigilado', async (
   assert.equal(ruta, null);
   await assert.rejects(() => access(join(dir, 'media')), { code: 'ENOENT' });
 });
+
+test('rutaMedio devuelve media/<basename(id)>.<ext> con el mismo mapeo que guardarMedio', () => {
+  const dir = '/datos';
+  const a = new Almacen({ dir, vigilados: { esVigilado: async () => true } });
+  const casos = [
+    ['audio/ogg; codecs=opus', 'ogg'],
+    ['image/jpeg', 'jpg'],
+    ['image/png', 'png'],
+    ['image/webp', 'webp'],
+    ['application/x-raro', 'bin'],
+    [undefined, 'bin'],
+  ];
+  for (const [mimetype, ext] of casos) {
+    assert.equal(a.rutaMedio({ mediaId: 'M1', mimetype }), join(dir, 'media', `M1.${ext}`));
+  }
+  assert.equal(a.rutaMedio({ mediaId: '../../etc/x', mimetype: 'image/png' }), join(dir, 'media', 'x.png'));
+});
