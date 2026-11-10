@@ -72,7 +72,7 @@ const PUERTO = 3121;
 const manejar = crearRouter({
   webhook: async () => ({ estado: 404, cuerpo: {} }),
   panel: async () => ({ estado: 404, cuerpo: {} }),
-  conversacion: crearConversacion({ almacen, vigilados, nombrePara: async () => 'Bodega Norte', version: '0.6.0' }),
+  conversacion: crearConversacion({ almacen, vigilados, nombrePara: async () => 'Bodega Norte', version: '0.6.0', dirReportes: join(dir, 'reportes') }),
   medios: crearMedios({ almacen, convertir: ffmpeg ? (origen, destino) => convertirAM4a({ origen, destino, ffmpeg }) : null }),
   dirReportes: join(dir, 'reportes'),
   hosts: [`127.0.0.1:${PUERTO}`],
@@ -143,6 +143,19 @@ informe.sinDesborde1100 = await js(sinDesborde);
 await ir(url, { ancho: 1100, alto: 800, movil: false, oscuro: true });
 await foto('escritorio-oscuro');
 
+// Ir del reporte a la conversación y volver al resumen: con el id en la dirección y, para los reportes
+// generados antes, por el referente.
+await mkdir(join(dir, 'reportes'), { recursive: true });
+await writeFile(join(dir, 'reportes', 'r-1.html'), `<!doctype html><title>Resumen demo</title><h1>Resumen demo</h1><a id="ir" href="/conversacion?chat=${encodeURIComponent(CHAT)}&desde=2026-11-08&hasta=2026-11-09">ver</a>`);
+await ir(url + '&reporte=r-1', { ancho: 390, alto: 844, movil: true, oscuro: false });
+informe.verResumenConId = await js("document.querySelector('.acciones a.boton-enlace')?.getAttribute('href')");
+await js("document.querySelector('.acciones a.boton-enlace').click()"); await dormir(900);
+informe.alVolverEsElReporte = await js("location.pathname + '|' + document.querySelector('h1')?.textContent");
+await js("document.querySelector('#ir').click()"); await dormir(1100);
+informe.verResumenPorReferente = await js("document.querySelector('.acciones a.boton-enlace')?.getAttribute('href')");
+await ir(url, { ancho: 390, alto: 844, movil: true, oscuro: false });
+informe.sinReporteNoHayBoton = await js("!document.querySelector('.acciones a.boton-enlace')");
+
 // Seguridad vista desde el navegador: un host ajeno y un id con ruta no sirven nada.
 informe.hostAjeno = await new Promise((resolve, reject) => {
   request({ host: '127.0.0.1', port: PUERTO, path: '/medios/IMG001', headers: { host: 'otro.example' } }, (res) => { res.resume(); resolve(res.statusCode); }).on('error', reject).end();
@@ -155,6 +168,7 @@ const esperado = {
   imagenCargada: true, reproductores: 1, fuentesDeAudio: 'audio/ogg,audio/mp4', transcripcionVisible: true, enlaceClicable: true,
   marcadoresSinArchivo: 2, filtroImagenes: '2:true', diasVisiblesConAudios: 2, buscaEnTranscripciones: 1, sinFiltroVuelveTodo: 7,
   idConRuta: 404, hostAjeno: 403,
+  verResumenConId: '/reportes/r-1', alVolverEsElReporte: '/reportes/r-1|Resumen demo', verResumenPorReferente: '/reportes/r-1', sinReporteNoHayBoton: true,
   ...(hayAudioReal ? { rangoDelAudio: (informe.rangoDelAudio ?? '').startsWith('206 bytes 0-9/') ? informe.rangoDelAudio : '206 bytes 0-9/…', m4a: 200 } : {}),
 };
 const fallos = Object.entries(esperado).filter(([k, v]) => informe[k] !== v);

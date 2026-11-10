@@ -221,7 +221,7 @@ export async function arrancar(env = process.env) {
   const nombrePara = async (chat) => (await listarChats().catch(() => [])).find((c) => c.jid === chat)?.nombre;
   const manejar = crearRouter({
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
-    conversacion: crearConversacion({ almacen, vigilados, nombrePara, version: pkg.version }),
+    conversacion: crearConversacion({ almacen, vigilados, nombrePara, version: pkg.version, dirReportes }),
     medios: crearMedios({ almacen, convertir }),
     panel: crearPanel({
       vigilados,

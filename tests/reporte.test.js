@@ -128,3 +128,26 @@ test('markdownAHtml vuelve etiqueta la fecha que cita cada tarea y deja intacto 
   const hostil = markdownAHtml('- <b>[2026-11-09 09:12]</b>');
   assert.ok(hostil.includes('&lt;b&gt;') && !hostil.includes('<b>'));
 });
+
+test('nuevoIdReporte da un id válido y distinto cada vez', async () => {
+  const { nuevoIdReporte } = await import('../src/reporte.js');
+  const a = nuevoIdReporte();
+  const b = nuevoIdReporte();
+  assert.match(a, /^[a-z0-9-]{8,60}$/);
+  assert.notEqual(a, b);
+});
+
+test('guardarReporte usa el id que se le da, para poder enlazarlo antes de escribirlo', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rep-'));
+  try {
+    const id = await guardarReporte({ dir, html: '<p>x</p>', id: 'abc-123' });
+    assert.equal(id, 'abc-123');
+    assert.equal(await readFile(join(dir, 'abc-123.html'), 'utf8'), '<p>x</p>');
+    await assert.rejects(guardarReporte({ dir, html: '<p>y</p>', id: 'abc-123' }), /existe/, 'no pisa un reporte existente');
+    for (const malo of ['../x', 'a/b', 'A-1', '', 'a b', 'x'.repeat(80)]) {
+      await assert.rejects(guardarReporte({ dir, html: '<p>z</p>', id: malo }), /id/, `rechaza ${JSON.stringify(malo)}`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

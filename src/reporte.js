@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { etiquetaPeriodo, fechaHoraLarga } from './fechas.js';
@@ -51,10 +51,6 @@ const CSS = BASE_CSS + `
 header{margin:4px 0 0}
 h1{margin:4px 0 6px;font-size:1.6rem;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere}
 .meta{margin:0;color:var(--suave);font-size:.95rem}
-.acciones{margin:14px 0 0}
-.boton-enlace{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid var(--borde);border-radius:10px;background:var(--sup);color:var(--texto);font-weight:600;text-decoration:none}
-.boton-enlace:hover{border-color:var(--suave)}
-.boton-enlace svg{width:18px;height:18px}
 .contenido{margin-top:20px;padding:8px 20px 20px;background:var(--sup);border:1px solid var(--borde);border-radius:12px}
 h2{margin:24px 0 8px;padding-top:16px;border-top:1px solid var(--borde);font-size:1.25rem;line-height:1.3}
 .contenido>h2:first-child{margin-top:12px;padding-top:0;border-top:0}
@@ -114,11 +110,26 @@ ${pie}
 `;
 }
 
-export async function guardarReporte({ dir, html }) {
+// Id de un reporte: solo minúsculas, números y guiones (es lo que acepta la ruta /reportes/:id).
+export const ID_REPORTE = /^[a-z0-9-]{3,60}$/;
+
+// Se pide antes de escribir el reporte para poder enlazarlo desde su propia conversación.
+export function nuevoIdReporte() {
+  return `${Date.now().toString(36)}-${randomBytes(5).toString('hex')}`;
+}
+
+export async function guardarReporte({ dir, html, id: idDado }) {
+  if (idDado !== undefined && !ID_REPORTE.test(String(idDado))) throw new Error('id de reporte no válido');
   const ts = Date.now();
   const hash = createHash('sha256').update(html).update(String(ts)).digest('hex').slice(0, 10);
-  const id = `${ts.toString(36)}-${hash}`;
+  const id = idDado ?? `${ts.toString(36)}-${hash}`;
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, `${id}.html`), html, 'utf8');
+  try {
+    // Con un id dado, 'wx' evita pisar un reporte que ya existe.
+    await writeFile(join(dir, `${id}.html`), html, { encoding: 'utf8', flag: idDado === undefined ? 'w' : 'wx' });
+  } catch (e) {
+    if (e.code === 'EEXIST') throw new Error('ya existe un reporte con ese id');
+    throw e;
+  }
   return id;
 }

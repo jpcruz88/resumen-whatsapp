@@ -216,3 +216,43 @@ test('el manejador pagina de a POR_PAGINA mensajes y respeta el número de pági
     assert.match(fuera.html, /Página 2 de 2/, 'una página inexistente cae a la última');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- volver al resumen ----------
+
+test('con un reporte de origen la conversación ofrece "Ver resumen" y lo conserva al paginar', () => {
+  const html = renderConversacion(base({ total: 700, pagina: 2, totalPaginas: 3, mensajes: [msg()], reporte: 'abc-123' }));
+  assert.match(html, /<a class="boton-enlace" href="\/reportes\/abc-123">[\s\S]*Ver resumen<\/a>/);
+  const enlaces = [...html.matchAll(/<a[^>]*class="pagina-enlace"[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(enlaces.length >= 2);
+  for (const e of enlaces) assert.ok(e.includes('reporte=abc-123'), e);
+  const sin = renderConversacion(base({ total: 1, mensajes: [msg()] }));
+  assert.doesNotMatch(sin, /<a class="boton-enlace" href="\/reportes\//, 'sin reporte de origen no hay botón');
+});
+
+test('un reporte de origen que no existe o tiene un id raro no genera un enlace roto', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'conv-rep-'));
+  try {
+    const vigilados = new Vigilados({ archivo: join(dir, 'vigilados.json') });
+    await vigilados.activar(CHAT);
+    const almacen = new Almacen({ dir, vigilados });
+    const dirReportes = join(dir, 'reportes');
+    await import('node:fs/promises').then((fs) => fs.mkdir(dirReportes, { recursive: true }));
+    await writeFile(join(dirReportes, 'real-1.html'), '<p>resumen</p>');
+    const manejar = crearConversacion({ almacen, vigilados, dirReportes, version: '1' });
+    const pedir = (reporte) => manejar({ ruta: q({ chat: CHAT, desde: '2026-11-09', hasta: '2026-11-09', reporte }) });
+    assert.match((await pedir('real-1')).html, /href="\/reportes\/real-1"/);
+    assert.doesNotMatch((await pedir('no-existe')).html, /<a class="boton-enlace" href="\/reportes\//);
+    for (const raro of ['../vigilados', 'a/b', 'A B', '<script>alert(1)</script>']) {
+      const r = await pedir(raro);
+      assert.equal(r.estado, 200);
+      assert.doesNotMatch(r.html, /<a class="boton-enlace" href="\/reportes\//, raro);
+      assert.ok(!r.html.includes(raro), raro);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('si el reporte viene de una página anterior sin id en la dirección, la conversación lo recupera del referente', () => {
+  const html = renderConversacion(base({ total: 1, mensajes: [msg()] }));
+  assert.match(html, /document\.referrer/);
+  assert.match(html, /\/reportes\/\[a-z0-9-\]\+/);
+});

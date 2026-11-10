@@ -1,1 +1,1 @@
-{"name":"resumen-whatsapp","version":"0.6.0","private":true,"type":"module","scripts":{"test":"node --test tests/","start":"node src/servidor.js","resumen":"node src/cli.js","e2e":"node e2e/verificar-panel.mjs","e2e:conversacion":"node e2e/verificar-conversacion.mjs"}}
+{"name":"resumen-whatsapp","version":"0.6.1","private":true,"type":"module","scripts":{"test":"node --test tests/","start":"node src/servidor.js","resumen":"node src/cli.js","e2e":"node e2e/verificar-panel.mjs","e2e:conversacion":"node e2e/verificar-conversacion.mjs"}}

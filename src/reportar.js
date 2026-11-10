@@ -1,7 +1,7 @@
 // Orquesta un reporte: valida chat, procesa medios, resume, renderiza y guarda.
 import { procesarMedio } from './medios.js';
 import { resumir } from './resumen.js';
-import { renderReporte, guardarReporte } from './reporte.js';
+import { renderReporte, guardarReporte, nuevoIdReporte } from './reporte.js';
 import pkg from '../package.json' with { type: 'json' };
 
 // `evolution` es opcional: si falta el archivo de un medio, se intenta bajarlo una vez.
@@ -38,8 +38,9 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
 
   const markdown = await resumir({ mensajes, apiKey, model, fetchFn });
   const vigiladoDesde = (await vigilados.desdeDe?.(chat)) ?? null;
-  const enlaceConversacion = `/conversacion?${new URLSearchParams({ chat, desde, hasta })}`;
+  const id = nuevoIdReporte(); // se conoce antes de escribir para que la conversación pueda volver a este reporte
+  const enlaceConversacion = `/conversacion?${new URLSearchParams({ chat, desde, hasta, reporte: id })}`;
   const html = renderReporte({ chat, nombre, desde, hasta, markdown, mensajes: mensajes.length, vigiladoDesde, version: pkg.version, enlaceConversacion });
-  const id = await guardarReporte({ dir: dirReportes, html });
+  await guardarReporte({ dir: dirReportes, html, id });
   return { id, url: `/reportes/${id}` };
 }

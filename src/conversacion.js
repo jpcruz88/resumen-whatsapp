@@ -1,9 +1,11 @@
 // Página de conversación: los mensajes de un chat vigilado en un periodo, como se leen en el chat,
 // con las imágenes a la vista y los audios con reproductor. No usa Gemini: lee del almacén local.
 // Todo texto que viene de WhatsApp se escapa antes de llegar al HTML.
-import { escaparHtml } from './reporte.js';
+import { access } from 'node:fs/promises';
+import { join } from 'node:path';
+import { escaparHtml, ID_REPORTE } from './reporte.js';
 import { inicioDelDia, finDelDia, etiquetaPeriodo, etiquetaDia } from './fechas.js';
-import { BASE_CSS, FLECHA, ICONO_BUSCAR } from './estilos.js';
+import { BASE_CSS, FLECHA, ICONO_BUSCAR, ICONO_CHAT } from './estilos.js';
 
 export const POR_PAGINA = 300;
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,7 +50,7 @@ audio{display:block;width:min(300px,100%);height:40px;margin:4px 0}
 .paginas{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0;color:var(--suave);font-size:.9rem}
 .pagina-enlace{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--borde);border-radius:10px;color:var(--texto);text-decoration:none;font-weight:600;background:var(--sup)}
 .pagina-enlace:hover{border-color:var(--suave)}
-@media print{body{background:#fff;color:#000}.volver,.herramientas,.paginas{display:none}.msg{border-color:#bbb;break-inside:avoid}}
+@media print{body{background:#fff;color:#000}.volver,.acciones,.herramientas,.paginas{display:none}.msg{border-color:#bbb;break-inside:avoid}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 `;
 
@@ -80,6 +82,25 @@ const JS = String.raw`
   }
   entrada.addEventListener('input', aplicar);
   document.querySelectorAll('input[name="tipo"]').forEach((r) => r.addEventListener('change', aplicar));
+})();
+`;
+
+// Si se llegó desde un reporte que no puso su id en la dirección (los generados antes de este cambio),
+// se recupera del referente: solo del mismo sitio y solo si la ruta es /reportes/<id>.
+const JS_REFERENTE = String.raw`
+(() => {
+  if (document.querySelector('.boton-enlace[href^="/reportes/"]') || !document.referrer) return;
+  let u;
+  try { u = new URL(document.referrer); } catch (_) { return; }
+  if (u.origin !== location.origin || !new RegExp('^/reportes/[a-z0-9-]+$').test(u.pathname)) return;
+  const enlace = document.createElement('a');
+  enlace.className = 'boton-enlace';
+  enlace.href = u.pathname;
+  enlace.textContent = 'Ver resumen';
+  const contenedor = document.createElement('p');
+  contenedor.className = 'acciones';
+  contenedor.append(enlace);
+  document.querySelector('.cabecera').append(contenedor);
 })();
 `;
 
@@ -127,10 +148,10 @@ function mensajeHtml(m) {
   return `<li class="msg ${propio ? 'propio' : 'ajeno'}" data-tipo="${tipo}">\n${autor}${cuerpo}\n<time datetime="${escaparHtml(m.fecha)}">${hora(m.fecha)}</time>\n</li>`;
 }
 
-function navegacion({ chat, desde, hasta, pagina, totalPaginas }) {
+function navegacion({ chat, desde, hasta, reporte, pagina, totalPaginas }) {
   if (totalPaginas <= 1) return '';
   const enlace = (n, texto) => {
-    const q = new URLSearchParams({ chat, desde, hasta, pagina: String(n) });
+    const q = new URLSearchParams({ chat, desde, hasta, ...(reporte ? { reporte } : {}), pagina: String(n) });
     return `<a class="pagina-enlace" href="${escaparHtml(`/conversacion?${q}`)}">${texto}</a>`;
   };
   return `<nav class="paginas" aria-label="Páginas de la conversación">
@@ -140,7 +161,7 @@ ${pagina < totalPaginas ? enlace(pagina + 1, 'Siguiente') : '<span></span>'}
 </nav>`;
 }
 
-export function renderConversacion({ nombre, chat, desde, hasta, mensajes, total, pagina, totalPaginas, version }) {
+export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total, pagina, totalPaginas, version }) {
   const titulo = escaparHtml(nombre || chat || 'Conversación');
   const cuenta = `${total} ${total === 1 ? 'mensaje' : 'mensajes'}`;
   let diaActual = null;
@@ -153,7 +174,10 @@ export function renderConversacion({ nombre, chat, desde, hasta, mensajes, total
     }
     filas.push(mensajeHtml(m));
   }
-  const nav = navegacion({ chat, desde, hasta, pagina, totalPaginas });
+  const nav = navegacion({ chat, desde, hasta, reporte, pagina, totalPaginas });
+  const acciones = reporte
+    ? `<p class="acciones"><a class="boton-enlace" href="/reportes/${escaparHtml(reporte)}">${ICONO_CHAT}Ver resumen</a></p>`
+    : '';
   const cuerpo = mensajes.length === 0
     ? '<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>Solo se guardan los mensajes que llegan después de empezar a vigilar el chat, más el historial que WhatsApp manda al vincular.</p></div>'
     : `${nav}<ol class="mensajes" id="lista">\n${filas.join('\n')}\n</ol>\n${nav}`;
@@ -183,6 +207,7 @@ export function renderConversacion({ nombre, chat, desde, hasta, mensajes, total
 <h1>${titulo}</h1>
 <p class="meta">${escaparHtml(etiquetaPeriodo(desde, hasta))}</p>
 <p class="meta">${cuenta}</p>
+${acciones}
 </header>
 ${herramientas}
 <main>
@@ -191,6 +216,7 @@ ${cuerpo}
 ${pie}
 </div>
 ${mensajes.length === 0 ? '' : `<script>${JS}</script>`}
+<script>${JS_REFERENTE}</script>
 </body>
 </html>
 `;
@@ -218,7 +244,7 @@ const hoy = () => {
 };
 
 // GET /conversacion?chat=<jid>&desde=<AAAA-MM-DD|ISO>&hasta=<...>&pagina=<n>
-export function crearConversacion({ almacen, vigilados, nombrePara, version }) {
+export function crearConversacion({ almacen, vigilados, nombrePara, version, dirReportes }) {
   return async function conversacion({ ruta }) {
     const q = new URL(String(ruta), 'http://local').searchParams;
     const chat = q.get('chat');
@@ -228,6 +254,12 @@ export function crearConversacion({ almacen, vigilados, nombrePara, version }) {
     const desde = limite(q.get('desde') ?? hoy(), false);
     const hasta = limite(q.get('hasta') ?? hoy(), true);
     if (!desde || !hasta || desde > hasta) return paginaError(400, 'Fechas no válidas', 'Revisa el periodo e inténtalo de nuevo.');
+
+    // Reporte de origen: solo si el id es válido y el archivo existe, para no mostrar un enlace roto.
+    const idReporte = q.get('reporte');
+    const reporte = dirReportes && idReporte && ID_REPORTE.test(idReporte)
+      && (await access(join(dirReportes, `${idReporte}.html`)).then(() => true, () => false))
+      ? idReporte : null;
 
     const todos = await almacen.leer({ chat, desde, hasta });
     const totalPaginas = Math.max(1, Math.ceil(todos.length / POR_PAGINA));
@@ -245,7 +277,7 @@ export function crearConversacion({ almacen, vigilados, nombrePara, version }) {
     const nombre = await Promise.resolve(nombrePara?.(chat)).catch(() => undefined);
     return {
       estado: 200,
-      html: renderConversacion({ nombre, chat, desde, hasta, mensajes, total: todos.length, pagina, totalPaginas, version }),
+      html: renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total: todos.length, pagina, totalPaginas, version }),
     };
   };
 }

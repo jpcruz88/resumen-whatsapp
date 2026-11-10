@@ -12,6 +12,10 @@ body{margin:0;background:var(--bg);color:var(--texto);font:16px/1.6 system-ui,-a
 .volver:hover{color:var(--texto)}
 .volver svg{width:18px;height:18px}
 .pie{margin-top:24px;color:var(--suave);font-size:.85rem}
+.acciones{margin:14px 0 0}
+.boton-enlace{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid var(--borde);border-radius:10px;background:var(--sup);color:var(--texto);font-weight:600;text-decoration:none}
+.boton-enlace:hover{border-color:var(--suave)}
+.boton-enlace svg{width:18px;height:18px}
 `;
 
 export const FLECHA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
