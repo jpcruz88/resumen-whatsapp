@@ -21,7 +21,10 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch 
     },
     async listarChats() {
       const lista = await post('/chat/findChats', {});
-      return lista.map((c) => ({ jid: c.id, nombre: c.pushName }));
+      // En Evolution v2 el JID viene en `remoteJid`; `id` es un id interno de la base.
+      return lista
+        .filter((c) => c.remoteJid && !String(c.remoteJid).endsWith('@g.us'))
+        .map((c) => ({ jid: c.remoteJid, nombre: c.pushName }));
     },
   };
 }

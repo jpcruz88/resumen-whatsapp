@@ -34,19 +34,31 @@ test('descargarMedia lanza error con el status si no es 2xx', async () => {
   await assert.rejects(() => c.descargarMedia('X', 'c'), /500/);
 });
 
-test('listarChats mapea id/pushName a jid/nombre', async () => {
+test('listarChats mapea remoteJid/pushName a jid/nombre (forma real de Evolution v2)', async () => {
   let llamada;
   const fetchFn = async (url, opts) => {
     llamada = { url, opts };
-    return respuesta(200, [{ id: 'a@g.us', pushName: 'Grupo A' }, { id: 'b@s.whatsapp.net', pushName: 'Bea' }]);
+    return respuesta(200, [
+      { id: 'cm0x1', remoteJid: 'b@s.whatsapp.net', pushName: 'Bea' },
+      { id: null, remoteJid: 'c@s.whatsapp.net', pushName: null },
+    ]);
   };
   const c = crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'i', fetchFn });
   assert.deepEqual(await c.listarChats(), [
-    { jid: 'a@g.us', nombre: 'Grupo A' },
     { jid: 'b@s.whatsapp.net', nombre: 'Bea' },
+    { jid: 'c@s.whatsapp.net', nombre: null },
   ]);
   assert.equal(llamada.url, 'http://evo/chat/findChats/i');
   assert.equal(llamada.opts.method, 'POST');
+});
+
+test('listarChats descarta los grupos (@g.us)', async () => {
+  const fetchFn = async () => respuesta(200, [
+    { id: 'x1', remoteJid: 'a@g.us', pushName: 'Grupo A' },
+    { id: 'x2', remoteJid: 'b@s.whatsapp.net', pushName: 'Bea' },
+  ]);
+  const c = crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'i', fetchFn });
+  assert.deepEqual(await c.listarChats(), [{ jid: 'b@s.whatsapp.net', nombre: 'Bea' }]);
 });
 
 test('guardarMedio escribe media/<id>.<ext> segun mimetype', async () => {
