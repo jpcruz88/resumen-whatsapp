@@ -28,6 +28,8 @@ que te pidieron. **No responde ni envía nada a WhatsApp.**
    `node src/cli.js --chat 5215511111111@s.whatsapp.net --desde 2026-11-02 --hasta 2026-11-09`
    Imprime la URL local del reporte (`http://127.0.0.1:3100/reportes/<id>`).
 
+Para abrir el panel desde el celular u otro lugar, con acceso protegido por Cloudflare Access, sigue [docs/cloudflare.md](docs/cloudflare.md).
+
 ## Privacidad
 
 - Solo se guardan los chats que activas en el panel (lista `vigilados.json` en `DATOS_DIR`).
