@@ -129,3 +129,16 @@ test('el enlace a la conversación lleva el id del propio reporte, para poder vo
   const enlace = html.match(/<a class="boton-enlace" href="([^"]+)"/)[1].replace(/&amp;/g, '&');
   assert.equal(new URL(enlace, 'http://x').searchParams.get('reporte'), id);
 });
+
+test('un audio del historial que ya se recuperó sí se transcribe en el resumen', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: 'h1', chat: CHAT, tipo: 'audio', texto: null, mediaId: 'MH', mimetype: 'audio/ogg', fecha: '2026-11-09T10:00:00Z', propio: false, sinMedio: true });
+  await almacen.guardarMedio({ chat: CHAT, mediaId: 'MH', mimetype: 'audio/ogg', buffer: Buffer.from('ogg-recuperado') });
+  const fetchFn = fakeFetch();
+  await generarReporte({
+    chat: CHAT, desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  assert.equal(fetchFn.llamadas.filter((b) => b.includes('audio/ogg')).length, 1, 'el audio recuperado se manda a transcribir');
+  assert.ok(fetchFn.llamadas.some((b) => b.includes('transcripcion') && !b.includes('anterior a la vigilancia')));
+});

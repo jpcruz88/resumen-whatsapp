@@ -39,11 +39,25 @@ Los comandos usan las variables de `.env`; no pegues claves en el chat.
 4. WhatsApp manda el historial en lotes durante unos minutos. En `~/Library/Logs/resumen-whatsapp.log`
    aparece `historial importado: N de M` por cada lote.
 
+## Imágenes y audios del historial
+
+El historial trae, por cada imagen o audio, los datos con los que WhatsApp permite volver a pedir el archivo.
+Desde la versión 0.7.0 se guardan, y en la conversación cada uno aparece con un botón **Cargar imagen** o
+**Cargar audio**. Al pulsarlo se le pide el archivo a WhatsApp (de uno en uno, nunca todos a la vez) y se
+guarda para siempre en este equipo.
+
+- Si WhatsApp ya lo borró de sus servidores, Evolution le pide al teléfono que lo vuelva a subir. Eso solo
+  funciona si el teléfono sigue teniendo el archivo y está conectado. Si no, el botón avisa y deja reintentar.
+- Un historial importado **antes** de la 0.7.0 no trae esos datos: sus imágenes y audios salen como "no
+  disponible", sin botón. Para completarlos hay que repetir los pasos de arriba (volver a vincular): los
+  mensajes ya guardados no se duplican, solo se les agregan los datos de descarga.
+- Los audios recuperados también se transcriben cuando generes un resumen.
+
 ## Límites que conviene conocer
 
-- **Solo texto.** Los audios e imágenes anteriores a la vigilancia no traen el archivo y no se pueden pedir
-  después: en el reporte salen como "[audio anterior a la vigilancia: no disponible]". Las imágenes con pie
-  de foto conservan el pie.
+- **El archivo no viene con el historial.** Los audios e imágenes anteriores a la vigilancia se recuperan a
+  petición con el botón Cargar (ver arriba). Mientras no se carguen, el reporte los marca como "no disponible"
+  y las imágenes con pie de foto conservan el pie.
 - **La profundidad la decide WhatsApp.** Con `syncFullHistory` manda más que por defecto, pero no se puede
   asegurar hasta qué fecha. Si pides un periodo más viejo de lo que llegó, el reporte sale sin mensajes.
 - **Un chat que no estaba vigilado al vincular** no tiene historial importado. Para traerlo hay que marcarlo

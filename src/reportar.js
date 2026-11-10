@@ -15,7 +15,8 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
 
   for (const m of mensajes) {
     if (m.tipo !== 'audio' && m.tipo !== 'imagen') continue;
-    if (m.sinMedio) continue; // historial anterior a la vigilancia: no hay archivo que transcribir
+    // Historial anterior a la vigilancia: solo se transcribe si ya se recuperó el archivo.
+    if (m.sinMedio && !(await almacen.localizarMedio({ mediaId: m.mediaId, mimetype: m.mimetype }))) continue;
     try {
       const procesar = (ruta, mimetype) => procesarMedio({ tipo: m.tipo, ruta, mimetype, apiKey, model, fetchFn });
       const hallado = await almacen.localizarMedio({ mediaId: m.mediaId, mimetype: m.mimetype });

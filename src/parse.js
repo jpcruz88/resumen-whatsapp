@@ -1,5 +1,41 @@
 // Normaliza un evento messages.upsert de Evolution API v2.
 // Devuelve null si el evento no es texto, audio o imagen. Los grupos se aceptan: llevan esGrupo y autor.
+// Datos con los que WhatsApp permite volver a pedir un archivo. Evolution los manda en el historial: bytes como
+// objeto {0:..}, como lista o como base64, y números largos de protobuf. Se normalizan y se descarta todo lo
+// demás (miniaturas, formas de onda...), que pesa mucho y no sirve para descargar.
+const CLAVES_MEDIO = ['url', 'directPath', 'mediaKey', 'fileEncSha256', 'fileSha256', 'fileLength', 'mimetype', 'mediaKeyTimestamp', 'seconds', 'ptt', 'height', 'width'];
+const BYTES = new Set(['mediaKey', 'fileEncSha256', 'fileSha256']);
+const NUMEROS = new Set(['fileLength', 'mediaKeyTimestamp']);
+
+function aBytes(v) {
+  if (typeof v === 'string') { const b = Buffer.from(v, 'base64'); return b.length > 0 ? Array.from(b) : null; }
+  if (v && typeof v === 'object') {
+    const lista = Array.isArray(v) ? v : Object.values(v);
+    return lista.length > 0 && lista.every((x) => Number.isInteger(x) && x >= 0 && x <= 255) ? lista : null;
+  }
+  return null;
+}
+
+function aNumero(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\d+$/.test(v)) return Number(v);
+  if (v && typeof v === 'object' && 'low' in v) return (v.low >>> 0) + (v.high >>> 0) * 2 ** 32;
+  return undefined;
+}
+
+function extraerMedio(contenido) {
+  if (!contenido || typeof contenido !== 'object') return null;
+  const salida = {};
+  for (const clave of CLAVES_MEDIO) {
+    const v = contenido[clave];
+    if (v === undefined || v === null) continue;
+    const limpio = BYTES.has(clave) ? aBytes(v) : NUMEROS.has(clave) ? aNumero(v) : v;
+    if (limpio !== null && limpio !== undefined) salida[clave] = limpio;
+  }
+  // Sin la clave del archivo o sin dónde está no se puede pedir: no se guarda algo inservible.
+  return salida.mediaKey && (salida.directPath || salida.url) ? salida : null;
+}
+
 export function parsearEventoEvolution(payload) {
   if (!payload || payload.event !== 'messages.upsert' || !payload.data) return null;
   const d = Array.isArray(payload.data) ? payload.data[0] : payload.data;
@@ -33,6 +69,7 @@ function normalizar(d) {
   let mediaId = null;
   let mimetype = null;
   let base64 = null;
+  let medio = null;
 
   // Con webhook.base64 activo, Evolution manda el medio en el propio payload. La ruta documentada
   // es data.message.base64; se acepta también data.base64 por si la instancia lo pone ahí.
@@ -48,11 +85,13 @@ function normalizar(d) {
     texto = textoPlano.trim();
   } else if (msg.audioMessage) {
     tipo = 'audio';
+    medio = extraerMedio(msg.audioMessage);
     mediaId = d.key.id;
     mimetype = msg.audioMessage.mimetype ?? null;
     base64 = leerBase64();
   } else if (msg.imageMessage) {
     tipo = 'imagen';
+    medio = extraerMedio(msg.imageMessage);
     mediaId = d.key.id;
     mimetype = msg.imageMessage.mimetype ?? null;
     base64 = leerBase64();
@@ -79,7 +118,10 @@ function normalizar(d) {
     fecha: new Date(ts * 1000).toISOString(),
   };
   // Solo audio e imagen llevan el campo; el texto queda igual que antes.
-  if (tipo !== 'texto') parseado.base64 = base64;
+  if (tipo !== 'texto') {
+    parseado.base64 = base64;
+    if (medio) parseado.medio = medio;
+  }
   // En un grupo escriben varias personas: pushName es el nombre de quien escribió y participant su id.
   if (String(d.key.remoteJid ?? '').endsWith('@g.us')) {
     parseado.esGrupo = true;

@@ -16,6 +16,7 @@ import { conCache } from './cache.js';
 import pkg from '../package.json' with { type: 'json' };
 import { crearConversacion } from './conversacion.js';
 import { crearMedios } from './medios-http.js';
+import { crearRecuperacion } from './recuperar.js';
 import { buscarFfmpeg, convertirAM4a } from './audio.js';
 import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
@@ -34,9 +35,9 @@ export function crearManejador({ almacen, secreto, evolution }) {
       if (cuerpo?.event === 'messages.set') {
         // Historial al vincular: solo se guarda el de los chats vigilados; el resto se descarta.
         const recibidos = parsearHistorial(cuerpo);
-        const guardados = await almacen.guardarLote(recibidos);
-        if (recibidos.length > 0) console.log('historial importado:', guardados, 'de', recibidos.length);
-        return { estado: 200, cuerpo: { ok: true, guardados } };
+        const { nuevos, actualizados } = await almacen.guardarLoteDetallado(recibidos);
+        if (recibidos.length > 0) console.log('historial importado:', nuevos, 'de', recibidos.length, `(${actualizados} completados con datos de descarga)`);
+        return { estado: 200, cuerpo: { ok: true, guardados: nuevos, actualizados } };
       }
       const m = parsearEventoEvolution(cuerpo);
       // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
@@ -78,7 +79,7 @@ export async function servirReporte({ dirReportes, id }) {
 
 // El webhook exige apikey; el panel y los reportes van por el tunel con Access.
 // Defensa contra CSRF y DNS rebinding en las rutas del panel (no aplica al webhook).
-export function crearRouter({ webhook, panel, conversacion, medios, dirReportes, hosts = [] }) {
+export function crearRouter({ webhook, panel, conversacion, medios, recuperar, dirReportes, hosts = [] }) {
   const permitidos = new Set(hosts.map((h) => h.toLowerCase()));
   return async function enrutar(peticion) {
     const { metodo, ruta, cabeceras = {} } = peticion;
@@ -90,6 +91,7 @@ export function crearRouter({ webhook, panel, conversacion, medios, dirReportes,
     if (metodo === 'POST' && !String(cabeceras['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
       return { estado: 415, cuerpo: { error: 'se requiere application/json' } };
     }
+    if (metodo === 'POST' && camino === '/medios/recuperar' && recuperar) return recuperar(peticion);
     if (metodo === 'GET' && camino === '/conversacion' && conversacion) return conversacion(peticion);
     if (metodo === 'GET' && camino.startsWith('/medios/') && medios) return medios({ ...peticion, ruta: camino });
     if (metodo === 'GET' && camino.startsWith('/reportes/')) {
@@ -225,6 +227,7 @@ export async function arrancar(env = process.env) {
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
     conversacion: crearConversacion({ almacen, vigilados, nombrePara, nombres, version: pkg.version, dirReportes }),
     medios: crearMedios({ almacen, convertir }),
+    recuperar: crearRecuperacion({ almacen, vigilados, evolution }),
     panel: crearPanel({
       vigilados,
       evolution: { listarChats },

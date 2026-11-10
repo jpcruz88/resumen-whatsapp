@@ -8,7 +8,7 @@ const porNombre = (a, b) => {
   return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es');
 };
 
-export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch, timeoutMs = 30000 }) {
+export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch, timeoutMs = 30000, timeoutRecuperarMs = 90000 }) {
   async function post(ruta, cuerpo) {
     const r = await fetchFn(`${url}${ruta}/${instancia}`, {
       method: 'POST',
@@ -39,6 +39,26 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
         message: { key: { id: mediaId } },
         convertToMp4: false,
       });
+      return { buffer: Buffer.from(d.base64, 'base64'), mimetype: d.mimetype };
+    },
+    // Pide un archivo de un mensaje que Evolution no tiene guardado: se le manda el mensaje completo (con los
+    // datos de descarga) y, si WhatsApp ya lo borró de sus servidores, él le pide al teléfono que lo vuelva a subir.
+    // Puede tardar, por eso tiene su propio plazo.
+    async recuperarMedia({ chat, id, propio, autor, tipo, medio }) {
+      const key = { id, remoteJid: chat, fromMe: propio === true, ...(autor && propio !== true ? { participant: autor } : {}) };
+      const contenido = { [tipo === 'audio' ? 'audioMessage' : 'imageMessage']: medio };
+      const r = await fetchFn(`${url}/chat/getBase64FromMediaMessage/${instancia}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: apiKey },
+        body: JSON.stringify({ message: { key, message: contenido }, convertToMp4: false }),
+        signal: AbortSignal.timeout(timeoutRecuperarMs),
+      });
+      if (!r.ok) {
+        const detalle = String(await Promise.resolve(r.text?.()).catch(() => '') ?? '').slice(0, 300);
+        throw new Error(`Evolution respondió ${r.status}: ${detalle}`);
+      }
+      const d = await r.json();
+      if (!d?.base64) throw new Error('Evolution no devolvió el archivo');
       return { buffer: Buffer.from(d.base64, 'base64'), mimetype: d.mimetype };
     },
     // jid -> nombre de todos los contactos (número y @lid). Sirve para poner nombre a quien el historial

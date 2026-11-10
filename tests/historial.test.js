@@ -168,3 +168,9 @@ test('el prompt marca los audios e imágenes anteriores a la vigilancia como no 
   assert.match(p, /la factura \| \[imagen anterior a la vigilancia: no disponible\]/);
   assert.ok(!p.includes('[audio no procesado]'));
 });
+
+test('si el audio anterior a la vigilancia ya tiene transcripción, el prompt usa la transcripción y no el aviso', () => {
+  const p = construirPrompt([{ fecha: '2026-11-01T15:00:00.000Z', propio: false, tipo: 'audio', texto: null, sinMedio: true, textoMedia: 'necesito la cotización' }]);
+  assert.match(p, /necesito la cotización/);
+  assert.ok(!p.includes('anterior a la vigilancia: no disponible'));
+});

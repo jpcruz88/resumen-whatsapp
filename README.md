@@ -44,7 +44,7 @@ Para abrir el panel desde el celular u otro lugar, con acceso protegido por Clou
 
 En el panel, **Ver conversación** abre los mensajes del chat y del periodo elegido como en WhatsApp: con hora, quién escribió, imágenes que se abren y audios con reproductor (y su transcripción si ya se generó un resumen). También hay un botón en cada reporte. No usa Gemini. Los audios de WhatsApp son `.ogg`; si hay `ffmpeg` instalado se convierten a `.m4a` para que suenen en el iPhone y en Safari.
 
-Solo hay archivo de las imágenes y los audios que llegaron **después** de vigilar el chat; los del historial importado salen como "no disponible".
+Las imágenes y los audios que llegaron **después** de vigilar el chat ya están guardados. Los del historial importado salen con un botón **Cargar**, que se los pide a WhatsApp de uno en uno (ver `docs/importar-historial.md`).
 
 ## Historial anterior
 

@@ -15,6 +15,7 @@ const { Vigilados } = await import(SRC + 'vigilados.js');
 const { crearConversacion } = await import(SRC + 'conversacion.js');
 const { crearMedios } = await import(SRC + 'medios-http.js');
 const { crearRouter, crearServidorHttp } = await import(SRC + 'servidor.js');
+const { crearRecuperacion } = await import(SRC + 'recuperar.js');
 const { buscarFfmpeg, convertirAM4a } = await import(SRC + 'audio.js');
 
 const SALIDA = process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), 'capturas');
@@ -57,6 +58,8 @@ await almacen.guardarLote([
   { ...base, id: 'b2', fecha: loc(2026, 10, 9, 9, 6), tipo: 'audio', nombre: 'Carla Mendoza', autor: 'x3', texto: null, mediaId: 'AUD001', mimetype: 'audio/ogg' },
   { ...base, id: 'b3', fecha: loc(2026, 10, 9, 9, 8), tipo: 'texto', nombre: 'Yo', propio: true, texto: 'Perfecto, gracias. Les confirmo hoy mismo.' },
   { ...base, id: 'b4', fecha: loc(2026, 10, 9, 9, 9), tipo: 'imagen', nombre: 'Carla Mendoza', autor: 'x3', texto: null, mediaId: 'IMGFALTA', mimetype: 'image/png' },
+  { ...base, id: 'c1', fecha: loc(2026, 10, 9, 9, 10), tipo: 'imagen', nombre: 'Ana Beltrán', autor: 'x1', texto: 'foto del pizarrón', mediaId: 'IMGVIEJA', mimetype: 'image/png', sinMedio: true, medio: { directPath: '/d', mediaKey: [1, 2, 3] } },
+  { ...base, id: 'c2', fecha: loc(2026, 10, 9, 9, 11), tipo: 'imagen', nombre: 'Ana Beltrán', autor: 'x1', texto: null, mediaId: 'IMGBORRADA', mimetype: 'image/png', sinMedio: true, medio: { directPath: '/d', mediaKey: [1, 2, 3] } },
 ]);
 await almacen.guardarMedio({ chat: CHAT, mediaId: 'IMG001', mimetype: 'image/png', buffer: png(480, 320) });
 let hayAudioReal = false;
@@ -69,10 +72,13 @@ if (!hayAudioReal) await almacen.guardarMedio({ chat: CHAT, mediaId: 'AUD001', m
 await writeFile(almacen.rutaMedio({ mediaId: 'AUD001', mimetype: 'audio/ogg' }) + '.txt', 'Necesito que me mandes la cotización de las cincuenta copias antes del lunes.');
 
 const PUERTO = 3121;
+// Evolution de mentira: la imagen c1 todavía existe en WhatsApp; la c2 ya la borró.
+const evolucionFalsa = { recuperarMedia: async ({ id }) => { if (id === 'c2') throw new Error('Evolution respondió 400: Message not found'); return { buffer: png(480, 320), mimetype: 'image/png' }; } };
 const manejar = crearRouter({
   webhook: async () => ({ estado: 404, cuerpo: {} }),
   panel: async () => ({ estado: 404, cuerpo: {} }),
   conversacion: crearConversacion({ almacen, vigilados, nombrePara: async () => 'Bodega Norte', version: '0.6.0', dirReportes: join(dir, 'reportes') }),
+  recuperar: crearRecuperacion({ almacen, vigilados, evolution: evolucionFalsa, pausaMs: 0 }),
   medios: crearMedios({ almacen, convertir: ffmpeg ? (origen, destino) => convertirAM4a({ origen, destino, ffmpeg }) : null }),
   dirReportes: join(dir, 'reportes'),
   hosts: [`127.0.0.1:${PUERTO}`],
@@ -119,6 +125,16 @@ informe.m4a = await js(`fetch('/medios/AUD001.m4a').then((r) => r.status)`);
 informe.transcripcionVisible = await js('document.body.textContent.includes("cotización de las cincuenta copias")');
 informe.enlaceClicable = await js('!!document.querySelector(".texto a[href=\\"https://ejemplo.com/precios\\"]")');
 informe.marcadoresSinArchivo = await js('document.querySelectorAll(".sin-medio").length');
+informe.botonesCargar = await js('document.querySelectorAll("button.cargar").length');
+await foto('movil-con-botones');
+
+// Cargar una imagen vieja: la que WhatsApp aún tiene aparece; la que ya borró da un aviso claro y deja reintentar.
+await js("document.querySelector('li[data-msg=c1] button.cargar').click()"); await dormir(900);
+informe.imagenRecuperada = await js('(() => { const i = document.querySelector("li[data-msg=c1] .foto img"); return !!i && i.complete && i.naturalWidth === 480; })()');
+informe.botonesTrasCargar = await js('document.querySelectorAll("button.cargar").length');
+await js("document.querySelector('li[data-msg=c2] button.cargar').click()"); await dormir(900);
+informe.avisoSiYaNoEsta = await js('(() => { const c = document.querySelector("li[data-msg=c2] .sin-medio"); const b = c && c.querySelector("button.cargar"); return !!c && c.textContent.includes("ya no está disponible en WhatsApp") && !!b && b.textContent === "Reintentar" && !b.disabled; })()');
+await foto('movil-tras-cargar');
 
 // Filtros: por tipo y por texto, y que los separadores de día sigan a sus mensajes.
 await js("document.querySelector('#t-imagen').click()"); await dormir(250);
@@ -164,10 +180,11 @@ informe.idConRuta = await js(`fetch('/medios/..%2F..%2Fvigilados').then((r) => r
 
 chrome.kill(); servidor.close(); servidor.closeAllConnections?.();
 const esperado = {
-  sinDesborde390: true, sinDesborde320: true, sinDesborde1100: true, mensajes: 7, separadoresDeDia: 2,
+  sinDesborde390: true, sinDesborde320: true, sinDesborde1100: true, mensajes: 9, separadoresDeDia: 2,
   imagenCargada: true, reproductores: 1, fuentesDeAudio: 'audio/ogg,audio/mp4', transcripcionVisible: true, enlaceClicable: true,
-  marcadoresSinArchivo: 2, filtroImagenes: '2:true', diasVisiblesConAudios: 2, buscaEnTranscripciones: 1, sinFiltroVuelveTodo: 7,
-  idConRuta: 404, hostAjeno: 403,
+  marcadoresSinArchivo: 4, filtroImagenes: '4:true', diasVisiblesConAudios: 2, buscaEnTranscripciones: 1, sinFiltroVuelveTodo: 9, botonesCargar: 2,
+  idConRuta: 404, hostAjeno: 403, imagenRecuperada: true, botonesTrasCargar: 1,
+  avisoSiYaNoEsta: true,
   verResumenConId: '/reportes/r-1', alVolverEsElReporte: '/reportes/r-1|Resumen demo', verResumenPorReferente: '/reportes/r-1', sinReporteNoHayBoton: true,
   ...(hayAudioReal ? { rangoDelAudio: (informe.rangoDelAudio ?? '').startsWith('206 bytes 0-9/') ? informe.rangoDelAudio : '206 bytes 0-9/…', m4a: 200 } : {}),
 };

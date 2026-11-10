@@ -1,5 +1,5 @@
 // Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista de vigilados.
-import { appendFile, readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { appendFile, rename, readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
 const EXTENSIONES = {
@@ -34,8 +34,15 @@ export class Almacen {
   // vigilados y una por archivo de chat; lo que no es de un chat vigilado se descarta sin escribir nada.
   // Devuelve cuántos mensajes nuevos guardó.
   async guardarLote(mensajes) {
+    return (await this.guardarLoteDetallado(mensajes)).nuevos;
+  }
+
+  // Igual, pero cuenta también los mensajes viejos a los que se les completaron los datos para volver a pedir
+  // su imagen o audio (el historial se importó antes de guardarlos). Reescribe el archivo solo si hace falta.
+  async guardarLoteDetallado(mensajes) {
     const vigilados = new Set(await this.vigilados.lista());
-    if (vigilados.size === 0) return 0;
+    const total = { nuevos: 0, actualizados: 0 };
+    if (vigilados.size === 0) return total;
     const porChat = new Map();
     for (const m of mensajes) {
       if (!m) continue;
@@ -44,23 +51,41 @@ export class Almacen {
       if (!porChat.has(chat)) porChat.set(chat, []);
       porChat.get(chat).push({ ...m, chat });
     }
-    let guardados = 0;
     for (const [chat, lista] of porChat) {
       await mkdir(this.dir, { recursive: true });
       const ruta = this.archivo(chat);
-      const vistos = await this.#ids(ruta);
-      const lineas = [];
+      const registros = await this.#registros(ruta);
+      const posicion = new Map(registros.map((r, i) => [r.id, i]));
+      let actualizados = 0;
+      const nuevos = [];
       for (const m of lista) {
-        if (vistos.has(m.id)) continue;
-        vistos.add(m.id);
         // Mismas reglas que guardar(): ni el base64 ni chatAlt entran al archivo.
         const { base64: _base64, chatAlt: _chatAlt, ...paraGuardar } = m;
-        lineas.push(JSON.stringify(paraGuardar));
+        if (posicion.has(m.id)) {
+          const i = posicion.get(m.id);
+          if (paraGuardar.medio && !registros[i].medio) { registros[i] = { ...registros[i], medio: paraGuardar.medio }; actualizados++; }
+          continue;
+        }
+        posicion.set(m.id, registros.length + nuevos.length);
+        nuevos.push(paraGuardar);
       }
-      if (lineas.length > 0) await appendFile(ruta, lineas.join('\n') + '\n');
-      guardados += lineas.length;
+      if (actualizados > 0) {
+        // Se reescribe entero y se reemplaza de una vez: nunca queda un archivo a medias.
+        const temporal = `${ruta}.tmp`;
+        await writeFile(temporal, [...registros, ...nuevos].map((r) => JSON.stringify(r)).join('\n') + '\n');
+        await rename(temporal, ruta);
+      } else if (nuevos.length > 0) {
+        await appendFile(ruta, nuevos.map((r) => JSON.stringify(r)).join('\n') + '\n');
+      }
+      total.nuevos += nuevos.length;
+      total.actualizados += actualizados;
     }
-    return guardados;
+    return total;
+  }
+
+  async buscarMensaje({ chat, id }) {
+    if (!(await this.vigilados.esVigilado(chat))) return null;
+    return (await this.#registros(this.archivo(chat))).find((r) => r.id === id) ?? null;
   }
 
   async guardar(m) {
@@ -139,6 +164,14 @@ export class Almacen {
         return t >= d && t <= h;
       })
       .sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha));
+  }
+
+  async #registros(ruta) {
+    try {
+      return (await readFile(ruta, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    } catch {
+      return [];
+    }
   }
 
   async #ids(ruta) {

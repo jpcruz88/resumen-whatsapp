@@ -49,6 +49,12 @@ audio{display:block;width:min(300px,100%);height:40px;margin:4px 0}
 .sin-medio svg{flex:none;width:22px;height:22px}
 .sin-medio strong{display:block;color:var(--texto);font-size:.95rem}
 .sin-medio span{font-size:.85rem}
+.sin-medio p{margin:0}
+.sin-medio.recuperable{flex-wrap:wrap}
+.sin-medio.recuperable p{flex:1;min-width:10rem}
+.cargar{min-height:44px;padding:0 14px;border:1px solid var(--borde);border-radius:10px;background:var(--sup);color:var(--texto);font:inherit;font-weight:600;cursor:pointer}
+.cargar:hover:not(:disabled){border-color:var(--suave)}
+.cargar:disabled{opacity:.6;cursor:wait}
 .vacio{margin:16px 0;padding:16px;background:var(--sup2);border-radius:10px}
 .vacio p{margin:0 0 8px}.vacio p:last-child{margin:0;color:var(--suave)}
 .paginas{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0;color:var(--suave);font-size:.9rem}
@@ -84,6 +90,47 @@ const JS = String.raw`
     const filtrando = q !== '' || tipo !== 'todo';
     resultado.textContent = !filtrando ? '' : visibles === 0 ? 'Ningún mensaje coincide en esta página.' : visibles + ' de ' + mensajes.length + ' mensajes en esta página.';
   }
+  // "Cargar imagen / audio": lo pide a WhatsApp (de uno en uno) y lo pone en el lugar del aviso.
+  document.addEventListener('click', async (e) => {
+    const boton = e.target.closest('button.cargar');
+    if (!boton) return;
+    const caja = boton.closest('.sin-medio');
+    const fila = boton.closest('li.msg');
+    const motivo = caja.querySelector('span');
+    boton.disabled = true;
+    boton.textContent = 'Pidiéndolo a WhatsApp…';
+    motivo.textContent = 'Puede tardar hasta un minuto.';
+    try {
+      const r = await fetch('/medios/recuperar', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat: document.getElementById('lista').dataset.chat, id: fila.dataset.msg }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo cargar.');
+      let nodo;
+      if (fila.dataset.tipo === 'imagen') {
+        nodo = document.createElement('a');
+        nodo.className = 'foto'; nodo.href = d.url; nodo.target = '_blank'; nodo.rel = 'noopener';
+        const img = document.createElement('img');
+        img.src = d.url; img.alt = 'Imagen recuperada'; img.loading = 'lazy';
+        nodo.append(img);
+      } else {
+        nodo = document.createElement('audio');
+        nodo.controls = true; nodo.preload = 'none';
+        [['audio/ogg', d.url], ['audio/mp4', d.url + '.m4a']].forEach(([tipo, src]) => {
+          const fuente = document.createElement('source');
+          fuente.src = src; fuente.type = tipo;
+          nodo.append(fuente);
+        });
+      }
+      caja.replaceWith(nodo);
+    } catch (err) {
+      boton.disabled = false;
+      boton.textContent = 'Reintentar';
+      motivo.textContent = err.message;
+    }
+  });
   entrada.addEventListener('input', aplicar);
   document.querySelectorAll('input[name="tipo"]').forEach((r) => r.addEventListener('change', aplicar));
 })();
@@ -124,6 +171,10 @@ function conEnlaces(texto) {
 
 // Aviso de un archivo que no se puede mostrar: qué es y por qué.
 function sinMedio(m, icono, que) {
+  if (m.recuperable) {
+    const [titulo, boton] = que === 'Imagen' ? ['Imagen no guardada', 'Cargar imagen'] : ['Audio no guardado', 'Cargar audio'];
+    return `<div class="sin-medio recuperable">${icono}<p><strong>${titulo}</strong><span>Se puede pedir a WhatsApp.</span></p><button type="button" class="cargar boton secundario">${boton}</button></div>`;
+  }
   const titulo = m.sinMedio ? `${que} no disponible` : 'Archivo no disponible';
   const motivo = m.sinMedio ? 'Es de antes de vigilar este chat.' : 'No se guardó el archivo de este mensaje.';
   return `<div class="sin-medio">${icono}<p><strong>${titulo}</strong><span>${motivo}</span></p></div>`;
@@ -156,7 +207,7 @@ function mensajeHtml(m) {
     ? cuerpoMedio(m)
     : `<p class="texto">${conEnlaces(m.texto ?? '')}</p>`;
   const tipo = m.tipo === 'imagen' || m.tipo === 'audio' ? m.tipo : 'texto';
-  return `<li class="msg ${propio ? 'propio' : 'ajeno'}" data-tipo="${tipo}">\n${autor}${cuerpo}\n<time datetime="${escaparHtml(m.fecha)}">${hora(m.fecha)}</time>\n</li>`;
+  return `<li class="msg ${propio ? 'propio' : 'ajeno'}" data-tipo="${tipo}" data-msg="${escaparHtml(m.id ?? '')}">\n${autor}${cuerpo}\n<time datetime="${escaparHtml(m.fecha)}">${hora(m.fecha)}</time>\n</li>`;
 }
 
 function navegacion({ chat, desde, hasta, reporte, pagina, totalPaginas }) {
@@ -191,7 +242,7 @@ export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensaj
     : '';
   const cuerpo = mensajes.length === 0
     ? '<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>Solo se guardan los mensajes que llegan después de empezar a vigilar el chat, más el historial que WhatsApp manda al vincular.</p></div>'
-    : `${nav}<ol class="mensajes" id="lista">\n${filas.join('\n')}\n</ol>\n${nav}`;
+    : `${nav}<ol class="mensajes" id="lista" data-chat="${escaparHtml(chat)}">\n${filas.join('\n')}\n</ol>\n${nav}`;
   const herramientas = mensajes.length === 0 ? '' : `<div class="herramientas">
 <div class="busca">${ICONO_BUSCAR}<input type="search" id="buscar" placeholder="Buscar en esta página" aria-label="Buscar en los mensajes" autocomplete="off"></div>
 <fieldset class="chips"><legend class="solo-lectores">Mostrar</legend>
@@ -282,8 +333,11 @@ export function crearConversacion({ almacen, vigilados, nombrePara, nombres, ver
     const mensajes = conNombres(todos.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA), mapaNombres);
 
     for (const m of mensajes) {
-      if ((m.tipo !== 'audio' && m.tipo !== 'imagen') || m.sinMedio || !ID_MEDIO.test(String(m.mediaId ?? ''))) continue;
-      if (!(await almacen.localizarMedio({ mediaId: m.mediaId, mimetype: m.mimetype }))) continue;
+      if ((m.tipo !== 'audio' && m.tipo !== 'imagen') || !ID_MEDIO.test(String(m.mediaId ?? ''))) continue;
+      if (!(await almacen.localizarMedio({ mediaId: m.mediaId, mimetype: m.mimetype }))) {
+        m.recuperable = Boolean(m.medio); // hay datos para pedirlo a WhatsApp
+        continue;
+      }
       m.urlMedio = `/medios/${encodeURIComponent(m.mediaId)}`;
       if (m.tipo === 'audio') m.transcripcion = await almacen.leerTranscripcion({ mediaId: m.mediaId, mimetype: m.mimetype });
     }
