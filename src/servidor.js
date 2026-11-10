@@ -162,8 +162,8 @@ export async function arrancar(env = process.env) {
     panel: crearPanel({
       vigilados,
       evolution: { listarChats },
-      generar: ({ chat, desde, hasta }) =>
-        generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }),
+      generar: ({ chat, nombre, desde, hasta }) =>
+        generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }),
     }),
     dirReportes,
     hosts: [`127.0.0.1:${puerto}`, `localhost:${puerto}`, ...cfg.panelHosts],

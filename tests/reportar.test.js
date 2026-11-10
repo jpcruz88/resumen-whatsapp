@@ -55,3 +55,32 @@ test('un audio que falla no impide el reporte y dice "no se pudo procesar"', asy
   const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
   assert.ok(html.includes('resumen listo'));
 });
+
+test('el reporte lleva el nombre del chat y la cantidad de mensajes', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: '1', chat: CHAT, tipo: 'texto', texto: 'hola', fecha: '2026-11-09T10:00:00Z', propio: false });
+  await almacen.guardar({ id: '2', chat: CHAT, tipo: 'texto', texto: 'qué tal', fecha: '2026-11-09T10:05:00Z', propio: true });
+  const fetchFn = fakeFetch();
+  const { id } = await generarReporte({
+    chat: CHAT, nombre: 'Bodega Norte', desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
+  assert.match(html, /<h1>Bodega Norte<\/h1>/);
+  assert.match(html, /2 mensajes/);
+  assert.match(html, /Desarrollado por JP/);
+});
+
+test('sin mensajes el reporte explica desde cuándo se vigila y no llama a Gemini', async () => {
+  const { base, almacen } = await montar(true);
+  const desdeVigilar = new Date(2026, 10, 9, 19, 56, 0, 0).toISOString();
+  const vigilados = { esVigilado: async () => true, desdeDe: async () => desdeVigilar };
+  const fetchFn = fakeFetch();
+  const { id } = await generarReporte({
+    chat: CHAT, nombre: 'Bodega Norte', desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  assert.equal(fetchFn.llamadas.length, 0);
+  const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
+  assert.match(html, /Se empezó a vigilar el 9 de noviembre de 2026, 19:56/);
+});

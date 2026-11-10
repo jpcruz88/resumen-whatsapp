@@ -2,9 +2,10 @@
 import { procesarMedio } from './medios.js';
 import { resumir } from './resumen.js';
 import { renderReporte, guardarReporte } from './reporte.js';
+import pkg from '../package.json' with { type: 'json' };
 
 // `evolution` es opcional: si falta el archivo de un medio, se intenta bajarlo una vez.
-export async function generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }) {
+export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }) {
   // Primero el rechazo: antes de leer mensajes o mandar nada a Gemini.
   if (!(await vigilados.esVigilado(chat))) throw new Error('chat no vigilado');
 
@@ -35,7 +36,8 @@ export async function generarReporte({ chat, desde, hasta, almacen, vigilados, m
   }
 
   const markdown = await resumir({ mensajes, apiKey, model, fetchFn });
-  const html = renderReporte({ chat, desde, hasta, markdown });
+  const vigiladoDesde = (await vigilados.desdeDe?.(chat)) ?? null;
+  const html = renderReporte({ chat, nombre, desde, hasta, markdown, mensajes: mensajes.length, vigiladoDesde, version: pkg.version });
   const id = await guardarReporte({ dir: dirReportes, html });
   return { id, url: `/reportes/${id}` };
 }

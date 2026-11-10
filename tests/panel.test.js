@@ -111,6 +111,7 @@ test('POST /resumen de chat vigilado devuelve la url', async () => {
     assert.deepEqual(r.cuerpo, { url: '/reportes/abc-1' });
     assert.deepEqual(llamadas[0], {
       chat: JID,
+      nombre: 'Ana <b>& Co',
       desde: new Date(2026, 10, 1, 0, 0, 0, 0).toISOString(),
       hasta: new Date(2026, 10, 2, 23, 59, 59, 999).toISOString(),
     });

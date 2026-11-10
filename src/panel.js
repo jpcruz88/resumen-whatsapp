@@ -28,7 +28,9 @@ export function crearPanel({ vigilados, evolution, generar }) {
         return { estado: 400, cuerpo: { error: 'fechas AAAA-MM-DD requeridas' } };
       }
       if (!(await vigilados.esVigilado(chat))) return { estado: 403, cuerpo: { error: 'chat no vigilado' } };
-      const { url } = await generar({ chat, desde: inicioDelDia(desde), hasta: finDelDia(hasta) });
+      // El nombre sale de la lista en memoria; si Evolution no responde, el reporte sigue sin nombre.
+      const nombre = (await evolution.listarChats().catch(() => [])).find((c) => c.jid === chat)?.nombre;
+      const { url } = await generar({ chat, nombre, desde: inicioDelDia(desde), hasta: finDelDia(hasta) });
       return { estado: 200, cuerpo: { url } };
     }
 
