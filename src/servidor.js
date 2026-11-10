@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { crearPanel } from './panel.js';
 import { crearClienteEvolution } from './evolution.js';
+import { conCache } from './cache.js';
 import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
 
@@ -153,11 +154,14 @@ export async function arrancar(env = process.env) {
   const dirReportes = join(dir, 'reportes');
   const medios = { apiKey: cfg.geminiKey, model: cfg.geminiModel };
   const evolution = crearClienteEvolution(cfg.evolution);
+  // Listar contactos y grupos tarda ~10 s (Evolution consulta a WhatsApp): se guarda en memoria y se
+  // renueva por detrás, para que el panel abra al instante.
+  const listarChats = conCache(() => evolution.listarChats(), { ttlMs: 5 * 60 * 1000 });
   const manejar = crearRouter({
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
     panel: crearPanel({
       vigilados,
-      evolution,
+      evolution: { listarChats },
       generar: ({ chat, desde, hasta }) =>
         generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes, evolution }),
     }),
@@ -167,7 +171,10 @@ export async function arrancar(env = process.env) {
 
   const servidor = crearServidorHttp({ manejar });
 
-  servidor.listen(puerto, '127.0.0.1', () => console.log(`escuchando en 127.0.0.1:${puerto}`));
+  servidor.listen(puerto, '127.0.0.1', () => {
+    console.log(`escuchando en 127.0.0.1:${puerto}`);
+    listarChats.precalentar();
+  });
   return servidor;
 }
 
