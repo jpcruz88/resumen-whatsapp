@@ -1,10 +1,34 @@
 # Evolution API v2 solo para este proyecto. Escucha únicamente en 127.0.0.1.
-# Define EVOLUTION_API_KEY en tu .env (docker compose lo lee de ahí).
+# Define EVOLUTION_API_KEY y EVOLUTION_DB_PASSWORD en tu .env (docker compose los lee de ahí).
+#
+# Privacidad: Evolution NO guarda el contenido de los mensajes. Solo guarda la instancia, los
+# chats y los contactos (metadatos) para que el panel pueda listar los chats. El texto y los
+# medios llegan por el webhook (con webhook.base64 activo, ver README) y los guarda esta app.
 services:
+  evolution-postgres:
+    image: postgres:16-alpine
+    container_name: resumen-whatsapp-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${EVOLUTION_DB_PASSWORD:?Define EVOLUTION_DB_PASSWORD en .env}
+      - POSTGRES_DB=evolution
+    # Sin puertos publicados: solo evolution-api lo alcanza por la red interna de compose.
+    volumes:
+      - evolution_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   evolution-api:
     image: evoapicloud/evolution-api:latest
     container_name: resumen-whatsapp-evolution
     restart: unless-stopped
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
     extra_hosts:
@@ -13,8 +37,17 @@ services:
       - SERVER_URL=http://127.0.0.1:8080
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?Define EVOLUTION_API_KEY en .env}
       - AUTHENTICATION_TYPE=apikey
-      - DATABASE_ENABLED=false
-      - DATABASE_PROVIDER=sqlite
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_DB_PASSWORD}@evolution-postgres:5432/evolution
+      - DATABASE_CONNECTION_CLIENT_NAME=resumen_whatsapp
+      # Metadatos sí (instancia, chats, contactos); contenido de mensajes no.
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_DATA_HISTORIC=false
+      - DATABASE_SAVE_MESSAGE_UPDATE=false
       - REDIS_ENABLED=false
       - CONFIG_SESSION_PHONE_CLIENT=ResumenWhatsapp
       - CONFIG_SESSION_PHONE_NAME=ResumenWhatsapp
@@ -22,3 +55,4 @@ services:
       - evolution_data:/evolution/instances
 volumes:
   evolution_data:
+  evolution_pgdata:
