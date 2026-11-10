@@ -99,6 +99,18 @@ export class Almacen {
     return null;
   }
 
+  // Transcripción o descripción que dejó procesarMedio junto al archivo (<archivo>.txt), si existe.
+  async leerTranscripcion({ mediaId, mimetype }) {
+    const hallado = await this.localizarMedio({ mediaId, mimetype });
+    if (!hallado) return null;
+    try {
+      const texto = (await readFile(hallado.ruta + '.txt', 'utf8')).trim();
+      return texto || null;
+    } catch {
+      return null;
+    }
+  }
+
   // Guarda el archivo de un mensaje de un chat vigilado en rutaMedio().
   async guardarMedio({ chat, mediaId, mimetype, buffer }) {
     if (!(await this.vigilados.esVigilado(chat))) return null;

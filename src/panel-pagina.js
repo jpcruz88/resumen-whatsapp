@@ -98,6 +98,7 @@ fieldset.filtro { margin: 0 0 8px; }
 }
 @keyframes gira { to { transform: rotate(360deg); } }
 
+.acciones-form { display: grid; gap: 10px; }
 #estado { margin-top: 14px; min-height: 0; }
 #estado:empty { display: none; }
 .msg { padding: 12px 14px; border-radius: var(--radio-s); background: var(--superficie-2); font-size: .95rem; }
@@ -318,6 +319,14 @@ const JS = String.raw`
     if (error === 'chat no vigilado') return 'Ese chat ya no está vigilado. Actívalo en Chats y vuelve a intentar.';
     return 'No se pudo generar el resumen. Intenta de nuevo; si sigue fallando, revisa que el servicio esté encendido.';
   }
+  // Abre la conversación del periodo elegido (sin Gemini): mensajes, imágenes y audios.
+  $('#ver-conversacion').addEventListener('click', () => {
+    const [desde, hasta] = periodo();
+    if (!desde || !hasta) { mensaje('error', 'Elige las dos fechas del rango.'); return; }
+    if (desde > hasta) { mensaje('error', 'La fecha inicial no puede ser posterior a la final.'); return; }
+    const q = new URLSearchParams({ chat: form.elements.chat.value, desde, hasta });
+    window.open('/conversacion?' + q.toString(), '_blank', 'noopener');
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const [desde, hasta, cuando] = periodo();
@@ -410,7 +419,10 @@ ${opciones}
 <div class="campo"><label for="desde">Desde</label><input type="date" id="desde" name="desde"></div>
 <div class="campo"><label for="hasta">Hasta</label><input type="date" id="hasta" name="hasta"></div>
 </div>
+<div class="acciones-form">
 <button type="submit" id="generar" class="boton primario">Generar resumen</button>
+<button type="button" id="ver-conversacion" class="boton secundario">Ver conversación</button>
+</div>
 <div id="estado" aria-live="polite" role="status"></div>
 </form>`
     : `<div class="vacio">

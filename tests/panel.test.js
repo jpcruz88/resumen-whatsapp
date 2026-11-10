@@ -275,3 +275,13 @@ test('GET / avisa en la página si el JavaScript falla', async () => {
     assert.match(html, /unhandledrejection/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('GET / con chats vigilados ofrece "Ver conversación" junto a "Generar resumen"', async () => {
+  const { dir, panel, vigilados } = await montar();
+  try {
+    await vigilados.activar(JID);
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(html, /<button type="button" id="ver-conversacion" class="boton secundario">Ver conversación<\/button>/);
+    assert.match(html, /window\.open\('\/conversacion\?'/, 'el script abre la conversación del periodo elegido');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

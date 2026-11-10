@@ -38,7 +38,8 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
 
   const markdown = await resumir({ mensajes, apiKey, model, fetchFn });
   const vigiladoDesde = (await vigilados.desdeDe?.(chat)) ?? null;
-  const html = renderReporte({ chat, nombre, desde, hasta, markdown, mensajes: mensajes.length, vigiladoDesde, version: pkg.version });
+  const enlaceConversacion = `/conversacion?${new URLSearchParams({ chat, desde, hasta })}`;
+  const html = renderReporte({ chat, nombre, desde, hasta, markdown, mensajes: mensajes.length, vigiladoDesde, version: pkg.version, enlaceConversacion });
   const id = await guardarReporte({ dir: dirReportes, html });
   return { id, url: `/reportes/${id}` };
 }

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { etiquetaPeriodo, fechaHoraLarga } from './fechas.js';
+import { BASE_CSS, FLECHA as FLECHA_VOLVER, ICONO_CHAT } from './estilos.js';
 
 const ENTIDADES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -10,13 +11,24 @@ export function escaparHtml(texto) {
 }
 
 // Escapa primero y despues convierte; el markdown nunca introduce texto sin escapar.
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+// "[2026-11-09 09:12]" (la cita que el resumen pone en cada tarea) pasa a ser una etiqueta legible.
+// Una fecha imposible se deja tal cual.
+function conCitas(texto) {
+  return texto.replace(/\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})\]/g, (entero, a, m, d, h, min) => {
+    const mes = Number(m); const dia = Number(d);
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31 || Number(h) > 23 || Number(min) > 59) return entero;
+    return `<time class="cita" datetime="${a}-${m}-${d}T${h}:${min}">${dia} ${MES_CORTO[mes - 1]}, ${h}:${min}</time>`;
+  });
+}
+
 export function markdownAHtml(md) {
   const salida = [];
   let lista = false;
   let parrafo = [];
   const cerrarLista = () => { if (lista) { salida.push('</ul>'); lista = false; } };
   const cerrarParrafo = () => {
-    if (parrafo.length) { salida.push(`<p>${parrafo.join(' ')}</p>`); parrafo = []; }
+    if (parrafo.length) { salida.push(`<p>${conCitas(parrafo.join(' '))}</p>`); parrafo = []; }
   };
   for (const cruda of escaparHtml(md).split(/\r?\n/)) {
     const linea = cruda.trim();
@@ -27,7 +39,7 @@ export function markdownAHtml(md) {
     else if ((m = linea.match(/^[-*]\s+(.*)$/))) {
       cerrarParrafo();
       if (!lista) { salida.push('<ul>'); lista = true; }
-      salida.push(`<li>${m[1]}</li>`);
+      salida.push(`<li>${conCitas(m[1])}</li>`);
     } else { cerrarLista(); parrafo.push(linea); }
   }
   cerrarLista();
@@ -35,19 +47,14 @@ export function markdownAHtml(md) {
   return salida.join('');
 }
 
-const CSS = `
-:root{color-scheme:light dark;--bg:#f3f6f5;--sup:#fff;--sup2:#eaf0ee;--texto:#142420;--suave:#51615c;--borde:#d3ddd9;--acento:#0b6e63;--acento-suave:#d9efea}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1311;--sup:#151d1a;--sup2:#1d2824;--texto:#e8f0ed;--suave:#9db0a9;--borde:#2b3a35;--acento:#3ccbb6;--acento-suave:#143a34}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--texto);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-::selection{background:var(--acento-suave);color:var(--texto)}
-:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
-.pagina{max-width:44rem;margin:0 auto;padding:12px 16px 40px}
-.volver{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--suave);text-decoration:none;font-weight:600;font-size:.95rem}
-.volver:hover{color:var(--texto)}
-.volver svg{width:18px;height:18px}
+const CSS = BASE_CSS + `
+header{margin:4px 0 0}
 h1{margin:4px 0 6px;font-size:1.6rem;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere}
 .meta{margin:0;color:var(--suave);font-size:.95rem}
+.acciones{margin:14px 0 0}
+.boton-enlace{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid var(--borde);border-radius:10px;background:var(--sup);color:var(--texto);font-weight:600;text-decoration:none}
+.boton-enlace:hover{border-color:var(--suave)}
+.boton-enlace svg{width:18px;height:18px}
 .contenido{margin-top:20px;padding:8px 20px 20px;background:var(--sup);border:1px solid var(--borde);border-radius:12px}
 h2{margin:24px 0 8px;padding-top:16px;border-top:1px solid var(--borde);font-size:1.25rem;line-height:1.3}
 .contenido>h2:first-child{margin-top:12px;padding-top:0;border-top:0}
@@ -55,17 +62,16 @@ h3{margin:18px 0 6px;font-size:1.05rem}
 ul{margin:6px 0;padding-left:1.25rem}
 li{margin:8px 0}
 p{margin:10px 0}
+.cita{display:inline-block;padding:0 7px;border-radius:6px;background:var(--acento-suave);font-size:.85em;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .contenido.sin-tarjeta{padding:0;background:none;border:0}
 .vacio{margin:16px 0 8px;padding:16px;background:var(--sup2);border-radius:10px}
 .vacio p{margin:0 0 8px}
 .vacio p:last-child{margin:0;color:var(--suave)}
-.pie{margin-top:24px;color:var(--suave);font-size:.85rem}
-@media print{body{background:#fff;color:#000}.volver{display:none}.contenido{border:0;padding:0}.pie{color:#444}}`;
+@media print{body{background:#fff;color:#000}.volver,.acciones{display:none}.contenido{border:0;padding:0}.pie{color:#444}}`;
 
-const FLECHA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
 
 // mensajes: cuántos mensajes se resumieron. Con 0 no hay resumen y se explica por qué.
-export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, vigiladoDesde, version }) {
+export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, vigiladoDesde, version, enlaceConversacion }) {
   const titulo = escaparHtml(nombre || chat || 'Resumen');
   const periodo = escaparHtml(etiquetaPeriodo(desde, hasta));
   const cuenta = Number.isInteger(mensajes) ? `${mensajes} ${mensajes === 1 ? 'mensaje' : 'mensajes'}` : '';
@@ -76,6 +82,9 @@ export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, 
   const cuerpo = vacio
     ? `<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>${desdeVigilar}</p></div>`
     : markdownAHtml(markdown);
+  const acciones = enlaceConversacion
+    ? `<p class="acciones"><a class="boton-enlace" href="${escaparHtml(enlaceConversacion)}">${ICONO_CHAT}Ver conversación</a></p>`
+    : '';
   const pie = version ? `<footer class="pie">Resumen de WhatsApp v${escaparHtml(version)} · Desarrollado por JP</footer>` : '';
   return `<!doctype html>
 <html lang="es">
@@ -88,11 +97,12 @@ export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, 
 </head>
 <body>
 <div class="pagina">
-<a class="volver" href="/">${FLECHA}Volver al panel</a>
+<a class="volver" href="/">${FLECHA_VOLVER}Volver al panel</a>
 <header>
 <h1>${titulo}</h1>
 <p class="meta">${periodo}</p>
 ${cuenta ? `<p class="meta">${cuenta}</p>` : ''}
+${acciones}
 </header>
 <main class="contenido${vacio ? ' sin-tarjeta' : ''}">
 ${cuerpo}

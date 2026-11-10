@@ -40,6 +40,12 @@ que te pidieron. **No responde ni envía nada a WhatsApp.**
 
 Para abrir el panel desde el celular u otro lugar, con acceso protegido por Cloudflare Access, sigue [docs/cloudflare.md](docs/cloudflare.md).
 
+## Ver la conversación
+
+En el panel, **Ver conversación** abre los mensajes del chat y del periodo elegido como en WhatsApp: con hora, quién escribió, imágenes que se abren y audios con reproductor (y su transcripción si ya se generó un resumen). También hay un botón en cada reporte. No usa Gemini. Los audios de WhatsApp son `.ogg`; si hay `ffmpeg` instalado se convierten a `.m4a` para que suenen en el iPhone y en Safari.
+
+Solo hay archivo de las imágenes y los audios que llegaron **después** de vigilar el chat; los del historial importado salen como "no disponible".
+
 ## Historial anterior
 
 Para resumir fechas previas a vigilar un chat hay que importar el historial al vincular WhatsApp: ver `docs/importar-historial.md`.

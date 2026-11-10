@@ -101,3 +101,19 @@ test('un audio anterior a la vigilancia no se transcribe ni se pide a Evolution'
   assert.ok(fetchFn.llamadas.some((b) => b.includes('[audio anterior a la vigilancia: no disponible]')));
   await readFile(join(base, 'r', `${id}.html`), 'utf8');
 });
+
+test('el reporte generado enlaza a la conversación del mismo chat y periodo', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: '1', chat: CHAT, tipo: 'texto', texto: 'hola', fecha: '2026-11-09T10:00:00Z', propio: false });
+  const { id } = await generarReporte({
+    chat: CHAT, nombre: 'X', desde: '2026-11-09T00:00:00.000Z', hasta: '2026-11-10T00:00:00.000Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn: fakeFetch() }, dirReportes: join(base, 'r'),
+  });
+  const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
+  const enlace = html.match(/<a class="boton-enlace" href="([^"]+)"/)[1].replace(/&amp;/g, '&');
+  const q = new URL(enlace, 'http://x');
+  assert.equal(q.pathname, '/conversacion');
+  assert.equal(q.searchParams.get('chat'), CHAT);
+  assert.equal(q.searchParams.get('desde'), '2026-11-09T00:00:00.000Z');
+  assert.equal(q.searchParams.get('hasta'), '2026-11-10T00:00:00.000Z');
+});

@@ -2,6 +2,8 @@ import { pathToFileURL } from 'node:url';
 // Servidor HTTP: recibe webhooks de Evolution y sirve resúmenes.
 // Solo lectura del chat: nunca envía mensajes a WhatsApp.
 import { createServer } from 'node:http';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { parsearEventoEvolution, parsearHistorial } from './parse.js';
 import { Almacen } from './almacen.js';
@@ -11,6 +13,10 @@ import { readFile } from 'node:fs/promises';
 import { crearPanel } from './panel.js';
 import { crearClienteEvolution } from './evolution.js';
 import { conCache } from './cache.js';
+import pkg from '../package.json' with { type: 'json' };
+import { crearConversacion } from './conversacion.js';
+import { crearMedios } from './medios-http.js';
+import { buscarFfmpeg, convertirAM4a } from './audio.js';
 import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
 
@@ -72,7 +78,7 @@ export async function servirReporte({ dirReportes, id }) {
 
 // El webhook exige apikey; el panel y los reportes van por el tunel con Access.
 // Defensa contra CSRF y DNS rebinding en las rutas del panel (no aplica al webhook).
-export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
+export function crearRouter({ webhook, panel, conversacion, medios, dirReportes, hosts = [] }) {
   const permitidos = new Set(hosts.map((h) => h.toLowerCase()));
   return async function enrutar(peticion) {
     const { metodo, ruta, cabeceras = {} } = peticion;
@@ -84,6 +90,8 @@ export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
     if (metodo === 'POST' && !String(cabeceras['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
       return { estado: 415, cuerpo: { error: 'se requiere application/json' } };
     }
+    if (metodo === 'GET' && camino === '/conversacion' && conversacion) return conversacion(peticion);
+    if (metodo === 'GET' && camino.startsWith('/medios/') && medios) return medios({ ...peticion, ruta: camino });
     if (metodo === 'GET' && camino.startsWith('/reportes/')) {
       return servirReporte({ dirReportes, id: camino.slice('/reportes/'.length) });
     }
@@ -98,6 +106,47 @@ export const MAX_CUERPO = 256 * 1024 * 1024;
 function responderJson(res, estado, objeto) {
   res.writeHead(estado, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   res.end(JSON.stringify(objeto));
+}
+
+// Imágenes y audios, con soporte de Range: Safari y el iPhone lo exigen para reproducir audio y adelantarlo.
+// El tipo viene de una lista fija en medios-http.js y nosniff impide que el navegador lo reinterprete.
+async function servirArchivo(req, res, { archivo }) {
+  let info;
+  try { info = await stat(archivo.ruta); } catch { return responderJson(res, 404, { error: 'no encontrado' }); }
+  const total = info.size;
+  const cabeceras = {
+    'content-type': archivo.tipo,
+    'accept-ranges': 'bytes',
+    'cache-control': 'private, max-age=3600',
+    'x-content-type-options': 'nosniff',
+    'content-disposition': 'inline',
+  };
+  let inicio = 0;
+  let fin = total - 1;
+  let codigo = 200;
+  if (req.headers.range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+    let valido = Boolean(m) && (m[1] !== '' || m[2] !== '');
+    if (valido && m[1] === '') {
+      const ultimos = Number(m[2]);
+      valido = ultimos > 0;
+      inicio = Math.max(0, total - ultimos);
+    } else if (valido) {
+      inicio = Number(m[1]);
+      fin = m[2] === '' ? total - 1 : Math.min(Number(m[2]), total - 1);
+      valido = inicio < total && inicio <= fin;
+    }
+    if (!valido) {
+      res.writeHead(416, { 'content-range': `bytes */${total}`, 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'rango no válido' }));
+    }
+    codigo = 206;
+    cabeceras['content-range'] = `bytes ${inicio}-${fin}/${total}`;
+  }
+  cabeceras['content-length'] = String(Math.max(0, fin - inicio + 1));
+  res.writeHead(codigo, cabeceras);
+  if (total === 0) return res.end();
+  createReadStream(archivo.ruta, { start: inicio, end: fin }).on('error', () => res.destroy()).pipe(res);
 }
 
 // Lee el cuerpo como Buffers y lo decodifica una sola vez. Devuelve null si excede el tope.
@@ -140,7 +189,9 @@ export function crearServidorHttp({ manejar, maxCuerpo = MAX_CUERPO }) {
         cabeceras: req.headers,
         cuerpo: json,
       });
-      if (r.html !== undefined) {
+      if (r.archivo) {
+        await servirArchivo(req, res, r);
+      } else if (r.html !== undefined) {
         res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(r.html);
       } else {
@@ -165,8 +216,13 @@ export async function arrancar(env = process.env) {
   // Listar contactos y grupos tarda ~10 s (Evolution consulta a WhatsApp): se guarda en memoria y se
   // renueva por detrás, para que el panel abra al instante.
   const listarChats = conCache(() => evolution.listarChats(), { ttlMs: 5 * 60 * 1000 });
+  const ffmpeg = buscarFfmpeg();
+  const convertir = ffmpeg ? (origen, destino) => convertirAM4a({ origen, destino, ffmpeg }) : null;
+  const nombrePara = async (chat) => (await listarChats().catch(() => [])).find((c) => c.jid === chat)?.nombre;
   const manejar = crearRouter({
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
+    conversacion: crearConversacion({ almacen, vigilados, nombrePara, version: pkg.version }),
+    medios: crearMedios({ almacen, convertir }),
     panel: crearPanel({
       vigilados,
       evolution: { listarChats },

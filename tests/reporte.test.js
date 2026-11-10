@@ -108,3 +108,23 @@ test('renderReporte sin mensajes no mete el aviso dentro de otra tarjeta', () =>
   const lleno = renderReporte({ chat: 'a@g.us', nombre: 'X', markdown: '## Trabajo', mensajes: 2 });
   assert.match(lleno, /<main class="contenido">/);
 });
+
+test('renderReporte enlaza a la conversación del mismo periodo', () => {
+  const html = renderReporte({
+    chat: 'a@g.us', nombre: 'X', markdown: '## Trabajo', mensajes: 2,
+    enlaceConversacion: '/conversacion?chat=a%40g.us&desde=D&hasta=H',
+  });
+  assert.match(html, /<a class="boton-enlace" href="\/conversacion\?chat=a%40g\.us&amp;desde=D&amp;hasta=H">[\s\S]*Ver conversación<\/a>/);
+  const sin = renderReporte({ chat: 'a@g.us', nombre: 'X', markdown: '## Trabajo', mensajes: 2 });
+  assert.ok(!sin.includes('Ver conversación'));
+});
+
+test('markdownAHtml vuelve etiqueta la fecha que cita cada tarea y deja intacto lo demás', () => {
+  const html = markdownAHtml('- Enviar la cotización, pedida por Ana el [2026-11-09 09:12].\n- Sin fecha [x] ni [2026-13-45 99:99]');
+  assert.match(html, /<time class="cita" datetime="2026-11-09T09:12">9 nov, 09:12<\/time>/);
+  assert.ok(!html.includes('[2026-11-09 09:12]'));
+  assert.ok(html.includes('[x]'), 'otros corchetes no se tocan');
+  assert.ok(!/<time[^>]*2026-13-45/.test(html), 'una fecha imposible no se convierte');
+  const hostil = markdownAHtml('- <b>[2026-11-09 09:12]</b>');
+  assert.ok(hostil.includes('&lt;b&gt;') && !hostil.includes('<b>'));
+});

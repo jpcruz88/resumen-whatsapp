@@ -46,3 +46,10 @@ export function fechaHoraLarga(iso) {
   const dos = (n) => String(n).padStart(2, '0');
   return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}, ${dos(d.getHours())}:${dos(d.getMinutes())}`;
 }
+
+// Un día en español y en hora local: "lunes 9 de noviembre de 2026".
+export function etiquetaDia(iso) {
+  const d = valida(iso);
+  if (!d) return String(iso ?? '');
+  return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+}
