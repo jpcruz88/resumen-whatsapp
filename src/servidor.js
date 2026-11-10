@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { crearPanel } from './panel.js';
 import { crearClienteEvolution } from './evolution.js';
 import { generarReporte } from './reportar.js';
+import { leerConfig } from './config.js';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -65,25 +66,16 @@ export function crearRouter({ webhook, panel, dirReportes, hosts = [] }) {
 
 // Arranque real: lee configuración del entorno y escucha en el puerto indicado.
 export async function arrancar(env = process.env) {
-  const chats = (env.CHATS_PERMITIDOS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (chats.length === 0) throw new Error('Define CHATS_PERMITIDOS (JIDs separados por coma)');
-  if (!env.SECRETO_WEBHOOK) throw new Error('Define SECRETO_WEBHOOK');
-  if (!env.GEMINI_API_KEY) throw new Error('Define GEMINI_API_KEY');
-
-  const dir = env.DATOS_DIR ?? './datos';
-  const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
-  for (const c of chats) await vigilados.activar(c);
+  const cfg = leerConfig(env);
+  const dir = cfg.datosDir;
+  const puerto = cfg.puerto;
+  const vigilados = new Vigilados({ archivo: join(dir, 'vigilados.json') });
   const almacen = new Almacen({ dir, vigilados });
-  const puerto = Number(env.PUERTO ?? 3100);
-  const dirReportes = env.REPORTES_DIR ?? join(dir, 'reportes');
-  const medios = { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL };
-  const evolution = crearClienteEvolution({
-    url: env.EVOLUTION_URL,
-    apiKey: env.EVOLUTION_API_KEY,
-    instancia: env.EVOLUTION_INSTANCIA,
-  });
+  const dirReportes = join(dir, 'reportes');
+  const medios = { apiKey: cfg.geminiKey, model: cfg.geminiModel };
+  const evolution = crearClienteEvolution(cfg.evolution);
   const manejar = crearRouter({
-    webhook: crearManejador({ almacen, secreto: env.SECRETO_WEBHOOK }),
+    webhook: crearManejador({ almacen, secreto: cfg.secreto }),
     panel: crearPanel({
       vigilados,
       evolution,
@@ -91,11 +83,7 @@ export async function arrancar(env = process.env) {
         generarReporte({ chat, desde, hasta, almacen, vigilados, medios, dirReportes }),
     }),
     dirReportes,
-    hosts: [
-      `127.0.0.1:${puerto}`,
-      `localhost:${puerto}`,
-      ...(env.PANEL_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean),
-    ],
+    hosts: [`127.0.0.1:${puerto}`, `localhost:${puerto}`, ...cfg.panelHosts],
   });
 
   const servidor = createServer(async (req, res) => {
@@ -132,4 +120,9 @@ export async function arrancar(env = process.env) {
   return servidor;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) arrancar();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  arrancar().catch((e) => {
+    console.error(e.message);
+    process.exit(1);
+  });
+}

@@ -1,0 +1,24 @@
+# Evolution API v2 solo para este proyecto. Escucha únicamente en 127.0.0.1.
+# Define EVOLUTION_API_KEY en tu .env (docker compose lo lee de ahí).
+services:
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: resumen-whatsapp-evolution
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - SERVER_URL=http://127.0.0.1:8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?Define EVOLUTION_API_KEY en .env}
+      - AUTHENTICATION_TYPE=apikey
+      - DATABASE_ENABLED=false
+      - DATABASE_PROVIDER=sqlite
+      - REDIS_ENABLED=false
+      - CONFIG_SESSION_PHONE_CLIENT=ResumenWhatsapp
+      - CONFIG_SESSION_PHONE_NAME=ResumenWhatsapp
+    volumes:
+      - evolution_data:/evolution/instances
+volumes:
+  evolution_data:

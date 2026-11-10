@@ -1,10 +1,11 @@
 import { pathToFileURL } from 'node:url';
 // Uso: node src/cli.js --chat <JID> [--desde 2026-11-02] [--hasta 2026-11-09]
-// Lee del almacén local y muestra el resumen en la terminal.
+// Genera el reporte y muestra su URL local. El chat debe estar vigilado.
+import { join } from 'node:path';
 import { Almacen } from './almacen.js';
 import { Vigilados } from './vigilados.js';
-import { join } from 'node:path';
-import { resumir } from './resumen.js';
+import { leerConfig } from './config.js';
+import { generarReporte as generarReal } from './reportar.js';
 
 function leerArgs(argv) {
   const out = {};
@@ -12,27 +13,27 @@ function leerArgs(argv) {
   return out;
 }
 
-export async function main(argv = process.argv.slice(2), env = process.env) {
+export async function main(argv = process.argv.slice(2), env = process.env, { generarReporte = generarReal } = {}) {
   const a = leerArgs(argv);
-  const chats = (env.CHATS_PERMITIDOS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (!a.chat) throw new Error('Falta --chat <JID>');
-  if (!env.GEMINI_API_KEY) throw new Error('Define GEMINI_API_KEY');
+  const cfg = leerConfig(env);
 
-  const dir = env.DATOS_DIR ?? './datos';
-  const vigilados = new Vigilados({ archivo: env.VIGILADOS_ARCHIVO ?? join(dir, 'vigilados.json') });
-  for (const c of chats) await vigilados.activar(c);
-  const almacen = new Almacen({ dir, vigilados });
-  const mensajes = await almacen.leer({
+  const vigilados = new Vigilados({ archivo: join(cfg.datosDir, 'vigilados.json') });
+  const almacen = new Almacen({ dir: cfg.datosDir, vigilados });
+  const { id } = await generarReporte({
     chat: a.chat,
     desde: a.desde ? new Date(a.desde).toISOString() : undefined,
     hasta: a.hasta ? new Date(`${a.hasta}T23:59:59.999`).toISOString() : undefined,
+    almacen,
+    vigilados,
+    medios: { apiKey: cfg.geminiKey, model: cfg.geminiModel },
+    dirReportes: join(cfg.datosDir, 'reportes'),
   });
-  const texto = await resumir({ mensajes, apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL });
-  return texto;
+  return `http://127.0.0.1:${cfg.puerto}/reportes/${id}`;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((t) => console.log(t)).catch((e) => {
+  main().then((u) => console.log(u)).catch((e) => {
     console.error(e.message);
     process.exit(1);
   });
