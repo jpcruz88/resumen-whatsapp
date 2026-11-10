@@ -2,7 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const PROMPTS = {
-  audio: 'Transcribe este audio en español, tal cual. Si no se entiende, dilo.',
+  audio: 'Transcribe este audio en el idioma en que se habla, sin traducir, tal cual. Si no se entiende, dilo.',
   imagen: 'Describe esta imagen en una línea en español. Si contiene texto importante, cópialo.',
 };
 

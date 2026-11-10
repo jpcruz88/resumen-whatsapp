@@ -42,7 +42,9 @@ test('audio: envía inlineData base64 con el mimetype y devuelve la transcripci�
     const inline = parts.find((p) => p.inlineData).inlineData;
     assert.equal(inline.mimeType, 'audio/ogg');
     assert.equal(inline.data, bytes.toString('base64'));
-    assert.match(parts.find((p) => p.text).text, /Transcribe este audio en español/);
+    const prompt = parts.find((p) => p.text).text;
+    assert.match(prompt, /Transcribe este audio en el idioma en que se habla, sin traducir/);
+    assert.doesNotMatch(prompt, /en español/);
   });
 });
 
