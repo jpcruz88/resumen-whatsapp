@@ -1,5 +1,5 @@
 // Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista de vigilados.
-import { appendFile, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { appendFile, readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
 const EXTENSIONES = {
@@ -36,6 +36,22 @@ export class Almacen {
     const base = String(mimetype || '').split(';')[0].trim().toLowerCase();
     const ext = EXTENSIONES[base] ?? 'bin';
     return join(this.dir, 'media', `${basename(String(mediaId))}.${ext}`);
+  }
+
+  // Dónde está el archivo de un medio y con qué mimetype leerlo. Con mimetype, la ruta es la de
+  // rutaMedio(). Sin mimetype (el parseado no lo traía y se guardó con el de Evolution), busca
+  // la extensión conocida que exista. Devuelve null si el archivo no está.
+  async localizarMedio({ mediaId, mimetype }) {
+    const existe = (ruta) => access(ruta).then(() => true, () => false);
+    if (mimetype) {
+      const ruta = this.rutaMedio({ mediaId, mimetype });
+      return (await existe(ruta)) ? { ruta, mimetype } : null;
+    }
+    for (const [base, ext] of Object.entries(EXTENSIONES)) {
+      const ruta = this.rutaMedio({ mediaId, mimetype: base });
+      if (await existe(ruta)) return { ruta, mimetype: base };
+    }
+    return null;
   }
 
   // Guarda el archivo de un mensaje de un chat vigilado en rutaMedio().

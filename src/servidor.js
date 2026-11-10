@@ -27,8 +27,9 @@ export function crearManejador({ almacen, secreto, evolution }) {
       const m = parsearEventoEvolution(cuerpo);
       if (m && (await almacen.guardar(m)) && evolution && (m.tipo === 'audio' || m.tipo === 'imagen')) {
         try {
+          // El mimetype parseado manda (reportar lo usa para leer); el de Evolution es el respaldo.
           const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, m.chat);
-          await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: mimetype || m.mimetype, buffer });
+          await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer });
         } catch {
           // No se registra el texto del error: puede contener URLs o claves.
           console.error('descarga de medio fallida', m.mediaId);

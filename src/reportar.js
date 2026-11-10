@@ -13,10 +13,11 @@ export async function generarReporte({ chat, desde, hasta, almacen, vigilados, m
   for (const m of mensajes) {
     if (m.tipo !== 'audio' && m.tipo !== 'imagen') continue;
     try {
+      const hallado = await almacen.localizarMedio({ mediaId: m.mediaId, mimetype: m.mimetype });
       m.textoMedia = await procesarMedio({
         tipo: m.tipo,
-        ruta: almacen.rutaMedio({ mediaId: m.mediaId, mimetype: m.mimetype }),
-        mimetype: m.mimetype,
+        ruta: hallado?.ruta ?? almacen.rutaMedio({ mediaId: m.mediaId, mimetype: m.mimetype }),
+        mimetype: hallado?.mimetype ?? m.mimetype,
         apiKey,
         model,
         fetchFn,
