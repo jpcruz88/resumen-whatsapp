@@ -1,10 +1,9 @@
 // Normaliza un evento messages.upsert de Evolution API v2.
-// Devuelve null si el evento no es texto, audio o imagen, o si es de un grupo.
+// Devuelve null si el evento no es texto, audio o imagen. Los grupos se aceptan: llevan esGrupo y autor.
 export function parsearEventoEvolution(payload) {
   if (!payload || payload.event !== 'messages.upsert' || !payload.data) return null;
   const d = Array.isArray(payload.data) ? payload.data[0] : payload.data;
   if (!d || !d.key || !d.message) return null;
-  if (String(d.key.remoteJid ?? '').endsWith('@g.us')) return null;
 
   const msg = d.message;
   let tipo;
@@ -59,5 +58,10 @@ export function parsearEventoEvolution(payload) {
   };
   // Solo audio e imagen llevan el campo; el texto queda igual que antes.
   if (tipo !== 'texto') parseado.base64 = base64;
+  // En un grupo escriben varias personas: pushName es el nombre de quien escribió y participant su id.
+  if (String(d.key.remoteJid ?? '').endsWith('@g.us')) {
+    parseado.esGrupo = true;
+    parseado.autor = typeof d.key.participant === 'string' && d.key.participant ? d.key.participant : null;
+  }
   return parseado;
 }

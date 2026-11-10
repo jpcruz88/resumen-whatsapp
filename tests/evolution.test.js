@@ -80,21 +80,23 @@ test('listarChats funciona con findChats vacío y findContacts con datos', async
   assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
 });
 
-test('listarChats descarta grupos, isGroup, bots y broadcast', async () => {
+test('listarChats incluye los grupos (grupo: true) y sigue descartando bots y difusiones', async () => {
   const c = clienteCon({
     chats: [{ id: 'x1', remoteJid: 'a@g.us', pushName: 'Grupo A' }],
     contactos: [
       contacto('b@g.us', 'Grupo B', { isGroup: true, type: 'group' }),
-      contacto('c@s.whatsapp.net', 'Marcado grupo', { isGroup: true }),
       contacto('123@bot', 'Bot'),
       contacto('status@broadcast', 'Estado'),
       contacto('lista@broadcast', 'Lista'),
       contacto(NUM1, 'Cliente Uno'),
     ],
   });
-  assert.deepEqual(await c.listarChats(), [{ jid: NUM1, nombre: 'Cliente Uno' }]);
+  assert.deepEqual(await c.listarChats(), [
+    { jid: NUM1, nombre: 'Cliente Uno' },
+    { jid: 'a@g.us', nombre: 'Grupo A', grupo: true },
+    { jid: 'b@g.us', nombre: 'Grupo B', grupo: true },
+  ]);
 });
-
 test('listarChats deduplica por jid entre findChats y findContacts', async () => {
   const c = clienteCon({
     chats: [{ id: 'k', remoteJid: NUM1, pushName: null }],

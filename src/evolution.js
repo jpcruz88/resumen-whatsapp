@@ -30,7 +30,7 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
       return { buffer: Buffer.from(d.base64, 'base64'), mimetype: d.mimetype };
     },
     // Con el historial apagado Evolution no guarda chats (findChats viene vacío): los contactos
-    // son la fuente real. Se unen ambas listas y se quitan grupos, bots y difusiones.
+    // son la fuente real. Se unen ambas listas; se quitan bots y difusiones y se marcan los grupos.
     async listarChats() {
       const [chats, contactos] = await Promise.all([
         post('/chat/findChats', {}),
@@ -39,11 +39,14 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
       const porJid = new Map();
       for (const c of [...chats, ...contactos]) {
         const jid = c?.remoteJid;
-        if (!jid || c.isGroup === true) continue;
-        if (!/@(s\.whatsapp\.net|lid)$/.test(jid)) continue;
+        if (!jid) continue;
+        const grupo = jid.endsWith('@g.us');
+        if (!grupo && !/@(s\.whatsapp\.net|lid)$/.test(jid)) continue;
         const nombre = c.pushName ?? null;
         const previo = porJid.get(jid);
-        if (!previo || (previo.nombre == null && nombre != null)) porJid.set(jid, { jid, nombre });
+        if (!previo || (previo.nombre == null && nombre != null)) {
+          porJid.set(jid, grupo ? { jid, nombre, grupo: true } : { jid, nombre });
+        }
       }
       const clave = (n) => String(n ?? '').trim().toLowerCase();
       // Una misma persona aparece como número y como @lid: se queda el número.

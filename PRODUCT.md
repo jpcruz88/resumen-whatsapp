@@ -2,7 +2,7 @@
 
 ## Qué es
 Panel web personal para una sola persona. Sirve para dos cosas: elegir qué chats de WhatsApp se vigilan
-y pedir el resumen de uno de ellos en un periodo (hoy, ayer, últimos 7 días o un rango). El resultado es un
+y pedir el resumen de uno de ellos (chat individual o grupo) en un periodo (hoy, ayer, últimos 7 días o un rango). El resultado es un
 reporte con tareas pedidas, temas de trabajo y temas personales.
 
 ## Quién lo usa y cuándo

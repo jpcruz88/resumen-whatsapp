@@ -28,6 +28,9 @@ const chats = nombres.map((n, i) => ({ jid: `52155500000${String(i).padStart(2, 
 chats.push({ jid: '900000000000001@lid', nombre: 'Contacto con ID privado' });
 for (let i = 0; i < 40; i++) chats.push({ jid: `52155511111${String(i).padStart(2, '0')}@s.whatsapp.net`, nombre: `Cliente ${i + 1} Ana` });
 chats.push({ jid: '5215522222222@s.whatsapp.net', nombre: '.' }, { jid: '5215533333333@s.whatsapp.net', nombre: '👌' });
+chats.push({ jid: '120363000000000001@g.us', nombre: 'Equipo Ventas', grupo: true },
+  { jid: '120363000000000002@g.us', nombre: 'Familia', grupo: true },
+  { jid: '120363000000000003@g.us', nombre: 'Proveedores y entregas del mes de noviembre', grupo: true });
 
 const dir = await mkdtemp(join(tmpdir(), 'panel-e2e-'));
 const vigilados = new Vigilados({ archivo: join(dir, 'v.json') });
@@ -81,10 +84,19 @@ const informe = {};
 await ir(nueva(), { ...cel, oscuro: false });
 await foto('01-movil-resumen-claro');
 informe.sinDesbordeHorizontal390 = await js(sinDesborde);
+const visibles = "document.querySelectorAll('#lista-resultados li:not([hidden])').length";
+informe.visiblesSinEscribir = await js(visibles);
 
 if (!vacio) {
   await js("document.querySelector('#t-chats').click()"); await dormir(200);
   await foto('02-movil-chats-claro');
+  await js("document.querySelector('#f-grupos').click()"); await dormir(250);
+  await foto('02b-movil-solo-grupos');
+  informe.visiblesGrupos = await js(visibles);
+  informe.soloGrupos = await js("[...document.querySelectorAll('#lista-resultados li:not([hidden])')].every((l) => l.dataset.tipo === 'grupo')");
+  await js("document.querySelector('#f-todos').click()"); await dormir(250);
+  await js("document.querySelector('#mas').click()"); await dormir(250);
+  informe.visiblesTrasMostrarMas = await js(visibles);
   await js("const i=document.querySelector('#buscar');i.value='ana';i.dispatchEvent(new Event('input'))"); await dormir(250);
   await foto('03-movil-busqueda');
   informe.coincidenciasVisibles = await js("document.querySelectorAll('#lista-resultados li:not([hidden])').length");
@@ -139,11 +151,12 @@ if (vacio) {
 
 chrome.kill(); srv.close();
 const esperado = vacio
-  ? { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, pestanaInicial: 'Chats',
+  ? { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, pestanaInicial: 'Chats', visiblesSinEscribir: 30,
       pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block',
       elegirChatsMovilPestana: 'Chats', elegirChatsMovilFoco: 'buscar', elegirChatsMovilALaVista: true,
       elegirChatsEscritorioFoco: 'buscar', elegirChatsEscritorioALaVista: true }
   : { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, coincidenciasVisibles: 30,
+      visiblesSinEscribir: 30, visiblesGrupos: 3, soloGrupos: true, visiblesTrasMostrarMas: 60,
       vigiladosAntes: 3, vigiladosDespues: 4, cuentaTexto: '4', opcionesSelector: 4, botonDuranteCarga: true,
       enlaceReporte: '/reportes/demo', rangoVisible: true, pestanaInicial: 'Resumen',
       pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block' };

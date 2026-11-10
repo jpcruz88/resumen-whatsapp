@@ -78,14 +78,15 @@ test('parsea imagen con caption como texto', () => {
   assert.equal(m.mimetype, 'image/jpeg');
 });
 
-test('texto marca tipo texto; video y grupos devuelven null', () => {
+test('texto marca tipo texto; un video devuelve null y un grupo ya se acepta', () => {
   assert.equal(parsearEventoEvolution(evento(CHAT_OK, 'hola')).tipo, 'texto');
   const v = evento(CHAT_OK, '');
   v.data.message = { videoMessage: { mimetype: 'video/mp4' } };
   assert.equal(parsearEventoEvolution(v), null);
-  assert.equal(parsearEventoEvolution(evento('120363000000@g.us', 'hola')), null);
+  const g = parsearEventoEvolution(evento('120363000000@g.us', 'hola'));
+  assert.equal(g.chat, '120363000000@g.us');
+  assert.equal(g.esGrupo, true);
 });
-
 // ---------- almacén ----------
 
 test('guarda solo chats permitidos y filtra por periodo', async () => {

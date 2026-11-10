@@ -23,7 +23,6 @@ separado por categorías, qué es trabajo, qué es personal y qué tareas le pid
 
 - No responder mensajes ni enviar nada a WhatsApp.
 - No resúmenes automáticos o programados: se piden desde el panel.
-- No grupos (decisión propia, ver abajo).
 - No importar historial anterior al arranque del servidor.
 
 ## Antimetas (si pasa esto, falló aunque funcione)
@@ -69,7 +68,7 @@ separado por categorías, qué es trabajo, qué es personal y qué tareas le pid
    El link del panel abre el reporte en la Mac o en el celular.
 10. **Red local:** el servicio escucha en `127.0.0.1`. El webhook de Evolution exige la
     cabecera `apikey` igual a `SECRETO_WEBHOOK`.
-11. **Grupos:** fuera del alcance. *(Decisión propia; se puede pedir después.)*
+11. **Grupos:** incluidos desde la versión 0.3.0, a petición del usuario. Se listan en el panel con su propio icono y filtro. De cada mensaje se guarda quién lo escribió (nombre y id), y el resumen indica quién pidió cada tarea. Una tarea dirigida a otra persona del grupo no cuenta como "Tareas que me pidieron".
 12. **Retención:** mensajes y medios hasta que el usuario los borre. *(Decisión propia.)*
 13. **Modelo:** `GEMINI_MODEL` configurable. Se verifica al construir que acepte audio e imagen.
 

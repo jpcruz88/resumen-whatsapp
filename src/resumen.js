@@ -17,6 +17,13 @@ Responde en español, en este formato exacto:
 Si un tema es ambiguo, ponlo en Personal y márcalo con (?).
 No inventes nada que no esté en los mensajes.`;
 
+// Se agrega solo cuando la conversación es de un grupo: ahí escriben varias personas.
+const NOTA_GRUPO = `
+
+Esta conversación es de un grupo: escriben varias personas y cada línea empieza con el nombre de quien escribió.
+En las tareas indica quién las pidió y no le atribuyas a una persona lo que dijo otra.
+Si una tarea es para otra persona y no para mí, no la pongas en "Tareas que me pidieron"; menciónala en los temas.`;
+
 // Texto visible de un mensaje: audio e imagen usan su textoMedia
 // (transcripción o descripción); si no hay nada, se marca como no procesado.
 function textoDe(m) {
@@ -28,12 +35,16 @@ function textoDe(m) {
   return m.texto ?? '';
 }
 
+function quienEs(m, grupo) {
+  if (m.propio) return 'yo';
+  if (!grupo) return 'contacto';
+  return String(m.nombre ?? '').trim() || 'alguien del grupo';
+}
+
 export function construirPrompt(mensajes) {
-  const lineas = mensajes.map((m) => {
-    const quien = m.propio ? 'yo' : 'contacto';
-    return `[${formatoLocal(m.fecha)}] ${quien}: ${textoDe(m)}`;
-  });
-  return `${INSTRUCCIONES}\n\nConversación:\n${lineas.join('\n')}`;
+  const grupo = mensajes.some((m) => m.esGrupo);
+  const lineas = mensajes.map((m) => `[${formatoLocal(m.fecha)}] ${quienEs(m, grupo)}: ${textoDe(m)}`);
+  return `${INSTRUCCIONES}${grupo ? NOTA_GRUPO : ''}\n\nConversación:\n${lineas.join('\n')}`;
 }
 
 export async function resumir({

@@ -64,7 +64,13 @@ select, input[type="date"], input[type="search"] {
 select:hover, input:hover { border-color: var(--suave); }
 
 .chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.chips.tres { grid-template-columns: repeat(3, 1fr); }
 .chips input { position: absolute; opacity: 0; pointer-events: none; }
+.solo-lectores { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+fieldset.filtro { margin: 0 0 8px; }
+.aviso-global { max-width: 1040px; margin: 12px auto 0; padding: 0 16px; }
+.aviso-global .msg { margin: 0; }
+#mas { width: 100%; margin-top: 8px; }
 .chip {
   display: grid; place-items: center; min-height: 44px; padding: 0 10px; text-align: center;
   border: 1px solid var(--borde); border-radius: var(--radio-s); font-weight: 600; cursor: pointer;
@@ -115,6 +121,7 @@ select:hover, input:hover { border-color: var(--suave); }
   flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
   background: var(--acento-suave); color: var(--texto); font-weight: 650;
 }
+.avatar svg { width: 20px; height: 20px; }
 .datos { flex: 1; min-width: 0; display: grid; }
 .nombre { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-weight: 600; line-height: 1.3; }
 .numero { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--suave); font-size: .85rem; font-variant-numeric: tabular-nums; }
@@ -145,6 +152,10 @@ const JS = String.raw`
   const post = (ruta, cuerpo) => fetch(ruta, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo),
   });
+
+  // Si algo falla en el navegador, que se vea escrito en pantalla en vez de quedarse mudo.
+  window.addEventListener('error', (e) => avisar('Error en la página: ' + e.message + '. Recárgala; si sigue igual, avisa a quien la mantiene.'));
+  window.addEventListener('unhandledrejection', () => avisar('Algo falló al comunicarse con el servicio. Recarga la página e intenta de nuevo.'));
 
   // ---- Pestañas (en pantalla ancha se ven las dos vistas y las pestañas se ocultan) ----
   const vistas = { resumen: $('#vista-resumen'), chats: $('#vista-chats') };
@@ -179,34 +190,41 @@ const JS = String.raw`
   const hash = location.hash.slice(1);
   mostrar(hash === 'resumen' || hash === 'chats' ? hash : (cuenta() > 0 ? 'resumen' : 'chats'));
 
-  // ---- Buscar entre todos los contactos (muestra pocos a la vez) ----
+  // ---- Elegir entre todos los contactos y grupos (se muestran pocos a la vez) ----
   const LIMITE = 30;
   const entrada = $('#buscar');
-  function buscar() {
+  const mas = $('#mas');
+  let limite = LIMITE;
+  const filtroActual = () => (document.querySelector('input[name="filtro"]:checked') || {}).value || 'todos';
+  function buscar(reiniciar) {
+    if (reiniciar) limite = LIMITE;
     const q = sinAcentos(entrada.value.trim());
-    const ayuda = $('#ayuda-busqueda');
-    const filas = $$('#lista-resultados li');
-    if (q.length < 2) {
-      filas.forEach((f) => { f.hidden = true; });
-      ayuda.textContent = 'Escribe al menos 2 letras o números para buscar.';
-      return;
-    }
+    const filtro = filtroActual();
     let total = 0, mostradas = 0;
-    filas.forEach((f) => {
+    $$('#lista-resultados li').forEach((f) => {
       if (f._k === undefined) f._k = sinAcentos(f.dataset.buscar);
-      const ok = f._k.includes(q);
+      const tipoOk = filtro === 'todos' || (filtro === 'grupos') === (f.dataset.tipo === 'grupo');
+      const ok = tipoOk && (q === '' || f._k.includes(q));
       if (ok) total += 1;
-      f.hidden = !ok || mostradas >= LIMITE;
-      if (ok && mostradas < LIMITE) mostradas += 1;
+      f.hidden = !ok || mostradas >= limite;
+      if (ok && mostradas < limite) mostradas += 1;
     });
-    ayuda.textContent = total === 0
-      ? 'Sin coincidencias. Prueba con otra parte del nombre o del número.'
-      : total > LIMITE
-        ? 'Mostrando ' + LIMITE + ' de ' + total + '. Sigue escribiendo para acotar.'
-        : total + (total === 1 ? ' coincidencia.' : ' coincidencias.');
+    const ayuda = $('#ayuda-busqueda');
+    if (total === 0) {
+      ayuda.textContent = q === '' && filtro === 'grupos'
+        ? 'No hay grupos en tu lista de contactos.'
+        : 'Sin coincidencias. Prueba con otra parte del nombre o del número.';
+    } else if (total > mostradas) {
+      ayuda.textContent = 'Mostrando ' + mostradas + ' de ' + total + (q === '' ? '. Escribe para buscar o pulsa Mostrar más.' : '.');
+    } else {
+      ayuda.textContent = total + (total === 1 ? ' resultado.' : ' resultados.');
+    }
+    mas.hidden = total <= mostradas;
   }
-  entrada.addEventListener('input', buscar);
-  buscar();
+  entrada.addEventListener('input', () => buscar(true));
+  $$('input[name="filtro"]').forEach((x) => x.addEventListener('change', () => buscar(true)));
+  mas.addEventListener('click', () => { limite += LIMITE; buscar(false); });
+  buscar(true);
 
   // ---- Vigilar / dejar de vigilar ----
   function avisar(texto) {
@@ -336,6 +354,7 @@ const JS = String.raw`
 const GLOBO = '<path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4.5 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 9h8M8 12h5"/>';
 const svg = (interior) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${interior}</svg>`;
 const FAVICON = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0b6e63"/><g transform="translate(4 4)" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${GLOBO}</g></svg>`);
+const ICONO_GRUPO = '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.5-3 2.8-5 5.5-5s5 2 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.4.2 4.2 1.9 4.7 4.3"/>';
 const ICONO_BUSCAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
 
 function inicial(nombre) {
@@ -345,6 +364,7 @@ function inicial(nombre) {
 
 function numero(jid) {
   const [id, dominio] = String(jid).split('@');
+  if (dominio === 'g.us') return 'Grupo';
   return dominio === 's.whatsapp.net' ? `+${id}` : 'Número oculto por WhatsApp';
 }
 
@@ -352,11 +372,12 @@ function fila(c, vigilado) {
   const jid = escaparHtml(c.jid);
   const nombre = escaparHtml(c.nombre || c.jid);
   const buscar = escaparHtml(`${c.nombre || ''} ${c.jid}`);
+  const grupo = c.grupo === true || String(c.jid).endsWith('@g.us');
   const accion = vigilado ? 'quitar' : 'vigilar';
   const texto = vigilado ? 'Dejar de vigilar' : 'Vigilar';
   const oculto = vigilado ? '' : ' hidden';
-  return `<li data-buscar="${buscar}" data-chat="${jid}"${oculto}>
-<span class="avatar" aria-hidden="true">${escaparHtml(inicial(c.nombre))}</span>
+  return `<li data-buscar="${buscar}" data-chat="${jid}" data-tipo="${grupo ? 'grupo' : 'persona'}"${oculto}>
+<span class="avatar" aria-hidden="true">${grupo ? svg(ICONO_GRUPO) : escaparHtml(inicial(c.nombre))}</span>
 <span class="datos"><span class="nombre">${nombre}</span><span class="numero">${escaparHtml(numero(c.jid))}</span></span>
 <button type="button" class="boton secundario" data-accion="${accion}" aria-label="${texto} ${nombre}">${texto}</button>
 </li>`;
@@ -418,6 +439,7 @@ ${opciones}
 <button type="button" class="pestana" role="tab" id="t-chats" data-vista="chats" aria-controls="vista-chats" aria-selected="false">Chats</button>
 </div>
 </div></header>
+<div class="aviso-global"><p id="aviso" class="msg error" role="alert" hidden></p></div>
 <main>
 <section class="panel" id="vista-resumen" role="tabpanel" aria-labelledby="t-resumen" data-activa="true">
 <h2>Generar resumen</h2>
@@ -431,14 +453,20 @@ ${resumen}
 <ul class="filas" id="lista-vigilados">
 ${deLaLista.map((c) => fila(c, true)).join('\n')}
 </ul>
-<h3>Agregar un chat</h3>
-<div class="campo"><label for="buscar">Buscar entre ${chats.length} contactos</label>
+<h3>Agregar un chat o grupo</h3>
+<div class="campo"><label for="buscar">Buscar entre ${chats.length} contactos y grupos</label>
 <div class="busca">${ICONO_BUSCAR}<input type="search" id="buscar" placeholder="Nombre o número" autocomplete="off" enterkeyhint="search"></div></div>
+<fieldset class="filtro"><legend class="solo-lectores">Mostrar</legend>
+<div class="chips tres">
+<input type="radio" name="filtro" value="todos" id="f-todos" checked><label class="chip" for="f-todos">Todos</label>
+<input type="radio" name="filtro" value="personas" id="f-personas"><label class="chip" for="f-personas">Personas</label>
+<input type="radio" name="filtro" value="grupos" id="f-grupos"><label class="chip" for="f-grupos">Grupos</label>
+</div></fieldset>
 <p id="ayuda-busqueda" class="suave" aria-live="polite"></p>
-<p id="aviso" class="msg error" role="alert" hidden></p>
 <ul class="filas" id="lista-resultados">
 ${resto.map((c) => fila(c, false)).join('\n')}
 </ul>
+<button type="button" id="mas" class="boton secundario" hidden>Mostrar más</button>
 </section>
 </main>
 <footer class="pie">Resumen de WhatsApp v${escaparHtml(version)} · Desarrollado por JP</footer>

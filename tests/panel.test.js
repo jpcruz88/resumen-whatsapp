@@ -235,3 +235,42 @@ test('GET / muestra en el pie la versión de package.json y "Desarrollado por JP
     assert.ok(pie[1].includes('Desarrollado por JP'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+const GRUPO_JID = '120363000000000001@g.us';
+
+test('GET / marca los grupos: data-tipo, texto "Grupo" y las personas como persona', async () => {
+  const { dir, panel } = await montar({
+    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana' }, { jid: GRUPO_JID, nombre: 'Equipo <Ventas>', grupo: true }] },
+  });
+  try {
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    const grupo = html.match(new RegExp(`<li[^>]*data-chat="${GRUPO_JID}"[^>]*>[\\s\\S]*?</li>`))[0];
+    const persona = html.match(new RegExp(`<li[^>]*data-chat="${JID}"[^>]*>[\\s\\S]*?</li>`))[0];
+    assert.match(grupo, /data-tipo="grupo"/);
+    assert.match(grupo, /<span class="numero">Grupo<\/span>/);
+    assert.ok(grupo.includes('Equipo &lt;Ventas&gt;') && !grupo.includes('<Ventas>'));
+    assert.match(persona, /data-tipo="persona"/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / ofrece el filtro Todos, Personas y Grupos y el botón Mostrar más', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    for (const v of ['todos', 'personas', 'grupos']) {
+      assert.match(html, new RegExp(`<input[^>]*type="radio"[^>]*name="filtro"[^>]*value="${v}"`));
+    }
+    assert.match(html, /<input[^>]*name="filtro"[^>]*value="todos"[^>]*checked/);
+    assert.match(html, /<button[^>]*id="mas"/);
+    assert.match(html, /Buscar entre \d+ contactos y grupos/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / avisa en la página si el JavaScript falla', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(html, /addEventListener\('error'/);
+    assert.match(html, /unhandledrejection/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
