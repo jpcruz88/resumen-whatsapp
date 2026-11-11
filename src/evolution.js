@@ -33,6 +33,11 @@ export function crearClienteEvolution({ url, apiKey, instancia, fetchFn = fetch,
   }
 
   return {
+    // Una sesión conectada se anuncia como activa y WhatsApp deja de mandar notificaciones al celular
+    // y a la Mac. Marcarla "no disponible" las devuelve. Se pierde en cada reconexión: hay que repetirlo.
+    async marcarNoDisponible() {
+      await post('/instance/setPresence', { presence: 'unavailable' });
+    },
     // `chat` solo cumple la firma; el endpoint no lo necesita (R4).
     async descargarMedia(mediaId, chat) { // eslint-disable-line no-unused-vars
       const d = await post('/chat/getBase64FromMediaMessage', {

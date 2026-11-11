@@ -249,3 +249,14 @@ test('el timeout por defecto es de 30 s y se pasa signal a fetch', async () => {
   await c.listarChats();
   assert.ok(opts.signal instanceof AbortSignal);
 });
+
+test('marcarNoDisponible manda presence unavailable a /instance/setPresence', async () => {
+  let llamada;
+  const fetchFn = async (url, opts) => { llamada = { url, opts }; return respuesta(201, { presence: 'unavailable' }); };
+  const c = crearClienteEvolution({ url: 'http://evo', apiKey: 'K', instancia: 'inst', fetchFn });
+  await c.marcarNoDisponible();
+  assert.equal(llamada.url, 'http://evo/instance/setPresence/inst');
+  assert.equal(llamada.opts.method, 'POST');
+  assert.equal(llamada.opts.headers.apikey, 'K');
+  assert.deepEqual(JSON.parse(llamada.opts.body), { presence: 'unavailable' });
+});

@@ -25,7 +25,7 @@ Los comandos usan las variables de `.env`; no pegues claves en el chat.
    ```
    curl -X POST http://127.0.0.1:8080/webhook/set/resumen \
      -H "apikey: <EVOLUTION_API_KEY>" -H "Content-Type: application/json" \
-     -d '{"webhook":{"enabled":true,"url":"http://host.docker.internal:3100/webhook/evolution","events":["MESSAGES_UPSERT","MESSAGES_SET"],"base64":true,"headers":{"apikey":"<SECRETO_WEBHOOK>"}}}'
+     -d '{"webhook":{"enabled":true,"url":"http://host.docker.internal:3100/webhook/evolution","events":["MESSAGES_UPSERT","MESSAGES_SET","CONNECTION_UPDATE"],"base64":true,"headers":{"apikey":"<SECRETO_WEBHOOK>"}}}'
 
    curl -X POST http://127.0.0.1:8080/settings/set/resumen \
      -H "apikey: <EVOLUTION_API_KEY>" -H "Content-Type: application/json" \

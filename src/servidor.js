@@ -32,6 +32,13 @@ export function crearManejador({ almacen, secreto, evolution }) {
     if (!igual(cabeceras.apikey, secreto)) return { estado: 401, cuerpo: { error: 'no autorizado' } };
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
+      if (cuerpo?.event === 'connection.update') {
+        // Al conectar, la sesión queda "activa" y el celular deja de recibir notificaciones: se baja a no disponible.
+        if (cuerpo.data?.state === 'open' && evolution?.marcarNoDisponible) {
+          await evolution.marcarNoDisponible().catch(() => console.error('no se pudo marcar la sesión como no disponible'));
+        }
+        return { estado: 200, cuerpo: { ok: true } };
+      }
       if (cuerpo?.event === 'messages.set') {
         // Historial al vincular: el de los chats vigilados se guarda completo; el resto va al buzón.
         const recibidos = parsearHistorial(cuerpo);
@@ -260,6 +267,7 @@ export async function arrancar(env = process.env) {
 
   servidor.listen(puerto, '127.0.0.1', () => {
     console.log(`escuchando en 127.0.0.1:${puerto}`);
+    evolution.marcarNoDisponible().catch(() => {});
     listarChats.precalentar();
   });
   return servidor;

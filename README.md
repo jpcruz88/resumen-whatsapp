@@ -24,13 +24,13 @@ que te pidieron. **No responde ni envía nada a WhatsApp.**
      -d '{"instanceName":"resumen","integration":"WHATSAPP-BAILEYS","qrcode":true}'
    ```
    Abre `http://127.0.0.1:8080/manager` para ver el QR y escanearlo desde WhatsApp.
-4. Configura el webhook de la instancia (eventos `MESSAGES_UPSERT` y `MESSAGES_SET`, cabecera `apikey` = `SECRETO_WEBHOOK`).
+4. Configura el webhook de la instancia (eventos `MESSAGES_UPSERT`, `MESSAGES_SET` y `CONNECTION_UPDATE` (este último mantiene las notificaciones del celular), cabecera `apikey` = `SECRETO_WEBHOOK`).
    Con `"base64":true` Evolution manda el audio o la imagen dentro del propio webhook y esta app lo
    guarda en `DATOS_DIR/media`; así Evolution no tiene que conservar el mensaje para que lo descargues:
    ```
    curl -X POST http://127.0.0.1:8080/webhook/set/resumen \
      -H "apikey: $EVOLUTION_API_KEY" -H "Content-Type: application/json" \
-     -d '{"webhook":{"enabled":true,"url":"http://host.docker.internal:3100/webhook/evolution","events":["MESSAGES_UPSERT","MESSAGES_SET"],"base64":true,"headers":{"apikey":"<SECRETO_WEBHOOK>"}}}'
+     -d '{"webhook":{"enabled":true,"url":"http://host.docker.internal:3100/webhook/evolution","events":["MESSAGES_UPSERT","MESSAGES_SET","CONNECTION_UPDATE"],"base64":true,"headers":{"apikey":"<SECRETO_WEBHOOK>"}}}'
    ```
 5. Arranca el servidor: `npm start` (escucha solo en `127.0.0.1:PUERTO`). Desde el
    panel (`http://127.0.0.1:3100/`) eliges los chats vigilados y generas reportes.

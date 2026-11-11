@@ -220,3 +220,29 @@ test('fallo al guardar el medio con base64: responde 200 y no registra el conten
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('connection.update en estado open marca la sesión como no disponible para no apagar las notificaciones del celular', async () => {
+  const llamadas = [];
+  const evo = { marcarNoDisponible: async () => { llamadas.push('no-disponible'); } };
+  const { dir, enviar } = await montar(evo);
+  try {
+    for (const state of ['connecting', 'close']) await enviar({ event: 'connection.update', instance: 'resumen', data: { instance: 'resumen', state } });
+    assert.deepEqual(llamadas, []);
+    const r = await enviar({ event: 'connection.update', instance: 'resumen', data: { instance: 'resumen', state: 'open' } });
+    assert.equal(r.estado, 200);
+    assert.deepEqual(llamadas, ['no-disponible']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('si marcar no disponible falla, el webhook igual responde 200', async () => {
+  const evo = { marcarNoDisponible: async () => { throw new Error('Evolution caído'); } };
+  const { dir, enviar } = await montar(evo);
+  try {
+    const r = await enviar({ event: 'connection.update', data: { state: 'open' } });
+    assert.equal(r.estado, 200);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
