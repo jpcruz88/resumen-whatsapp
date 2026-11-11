@@ -33,7 +33,7 @@ export function crearManejador({ almacen, secreto, evolution }) {
 
     if (metodo === 'POST' && ruta === '/webhook/evolution') {
       if (cuerpo?.event === 'messages.set') {
-        // Historial al vincular: solo se guarda el de los chats vigilados; el resto se descarta.
+        // Historial al vincular: el de los chats vigilados se guarda completo; el resto va al buzón.
         const recibidos = parsearHistorial(cuerpo);
         const { nuevos, actualizados } = await almacen.guardarLoteDetallado(recibidos);
         if (recibidos.length > 0) console.log('historial importado:', nuevos, 'de', recibidos.length, `(${actualizados} completados con datos de descarga)`);
@@ -41,7 +41,9 @@ export function crearManejador({ almacen, secreto, evolution }) {
       }
       const m = parsearEventoEvolution(cuerpo);
       // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
+      // Lo de chats no vigilados no se descarta: va al buzón (solo texto y datos de descarga).
       const chat = m ? await almacen.resolverChat(m) : null;
+      if (m && !chat) await almacen.guardarEnBuzon([m]);
       if (m) m.chat = chat;
       if (chat && (await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
         // Con webhook.base64 el medio viaja en el payload: no se descarga nada de Evolution.
@@ -230,6 +232,7 @@ export async function arrancar(env = process.env) {
     recuperar: crearRecuperacion({ almacen, vigilados, evolution }),
     panel: crearPanel({
       vigilados,
+      almacen,
       evolution: { listarChats },
       generar: ({ chat, nombre, desde, hasta }) =>
         generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution, nombres }),
@@ -239,6 +242,11 @@ export async function arrancar(env = process.env) {
   });
 
   const servidor = crearServidorHttp({ manejar });
+
+  // El buzón de chats no vigilados guarda solo cfg.buzonDias días: se limpia al arrancar y cada día.
+  const limpiar = () => almacen.limpiarBuzon({ dias: cfg.buzonDias }).then((r) => r.borrados > 0 && console.log('buzón: borrados', r.borrados, 'mensajes viejos'), () => {});
+  limpiar();
+  setInterval(limpiar, 24 * 3600 * 1000).unref();
 
   servidor.listen(puerto, '127.0.0.1', () => {
     console.log(`escuchando en 127.0.0.1:${puerto}`);

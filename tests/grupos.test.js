@@ -67,11 +67,11 @@ test('el webhook guarda el mensaje de un grupo vigilado con su autor', async () 
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('un grupo que no está vigilado no escribe nada', async () => {
+test('un grupo que no está vigilado no escribe nada fuera del buzón', async () => {
   const { dir, enviar } = await montar([]);
   try {
     await enviar(eventoGrupo());
-    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json'), []);
+    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json' && f !== 'buzon'), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

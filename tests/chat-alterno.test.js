@@ -107,12 +107,12 @@ test('el descargarMedia de respaldo recibe el chat vigilado', async () => {
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('ninguno vigilado: no escribe nada', async () => {
+test('ninguno vigilado: no escribe nada fuera del buzón', async () => {
   const { dir, enviar } = await montar('5215599999999@s.whatsapp.net');
   try {
     const r = await enviar(evento({ remoteJid: LID, remoteJidAlt: NUMERO }));
     assert.equal(r.estado, 200);
-    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json'), []);
+    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json' && f !== 'buzon'), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -121,6 +121,6 @@ test('un alt de grupo se ignora aunque el grupo esté vigilado', async () => {
   try {
     await enviar(evento({ remoteJid: LID, remoteJidAlt: GRUPO }));
     assert.deepEqual(await almacen.leer({ chat: GRUPO }), []);
-    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json'), []);
+    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json' && f !== 'buzon'), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

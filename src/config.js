@@ -16,6 +16,8 @@ export function leerConfig(env = process.env) {
   if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) {
     throw new Error('PUERTO debe ser un entero entre 1 y 65535');
   }
+  const buzonDias = Number(env.BUZON_DIAS ?? 120);
+  if (!Number.isInteger(buzonDias) || buzonDias < 1) throw new Error('BUZON_DIAS debe ser un entero positivo');
   return {
     puerto,
     datosDir: env.DATOS_DIR || './datos',
@@ -23,6 +25,7 @@ export function leerConfig(env = process.env) {
     geminiKey: env.GEMINI_API_KEY,
     geminiModel: env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
     panelHosts: lista(env.PANEL_HOSTS),
+    buzonDias,
     evolution: {
       url: env.EVOLUTION_API_URL,
       apiKey: env.EVOLUTION_API_KEY,

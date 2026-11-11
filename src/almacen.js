@@ -1,5 +1,7 @@
-// Guarda mensajes en un JSONL por chat. Solo acepta chats de la lista de vigilados.
-import { appendFile, rename, readFile, writeFile, mkdir, access } from 'node:fs/promises';
+// Guarda mensajes en un JSONL por chat. Los chats vigilados van completos (con sus archivos). Lo que llega de los
+// demás chats se guarda solo como texto y datos de descarga en un buzón temporal (dir/buzon), sin leerlo ni
+// resumirlo: al vigilar el chat, promover() lo pasa al almacén del chat. Así vigilar un chat no pierde su pasado.
+import { appendFile, rename, readFile, writeFile, mkdir, access, readdir, unlink } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
 const EXTENSIONES = {
@@ -19,6 +21,104 @@ export class Almacen {
   archivo(chat) {
     const nombre = createHash('sha256').update(chat).digest('hex').slice(0, 16);
     return join(this.dir, `${nombre}.jsonl`);
+  }
+
+  archivoBuzon(chat) {
+    return join(this.dir, 'buzon', basename(this.archivo(chat)));
+  }
+
+  // Estados, difusiones y canales no son conversaciones: no se guardan.
+  #esConversacion(jid) {
+    return typeof jid === 'string' && jid !== '' && !/@(broadcast|newsletter)$/.test(jid);
+  }
+
+  // Guarda en el buzón lo de chats no vigilados: sin base64 ni archivos; los audios e imágenes quedan
+  // marcados sinMedio con sus datos de descarga para pedirlos después. Devuelve cuántos mensajes nuevos guardó.
+  async guardarEnBuzon(mensajes) {
+    const porChat = new Map();
+    for (const m of mensajes) {
+      if (!m || !this.#esConversacion(m.chat)) continue;
+      if (!porChat.has(m.chat)) porChat.set(m.chat, []);
+      porChat.get(m.chat).push(m);
+    }
+    let guardados = 0;
+    for (const [chat, lista] of porChat) {
+      const ruta = this.archivoBuzon(chat);
+      const ids = await this.#ids(ruta);
+      const nuevos = [];
+      for (const m of lista) {
+        if (ids.has(m.id)) continue;
+        ids.add(m.id);
+        const { base64: _base64, ...paraGuardar } = m;
+        if (m.tipo === 'audio' || m.tipo === 'imagen') paraGuardar.sinMedio = true;
+        nuevos.push(paraGuardar);
+      }
+      if (nuevos.length === 0) continue;
+      await mkdir(join(this.dir, 'buzon'), { recursive: true });
+      await appendFile(ruta, nuevos.map((r) => JSON.stringify(r)).join('\n') + '\n');
+      guardados += nuevos.length;
+    }
+    return guardados;
+  }
+
+  // Pasa al almacén de un chat recién vigilado lo que hubiera en el buzón (con su otro id incluido).
+  // Devuelve cuántos mensajes nuevos quedaron guardados.
+  async promover(chat) {
+    const carpeta = join(this.dir, 'buzon');
+    let archivos;
+    try {
+      archivos = (await readdir(carpeta)).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      return 0;
+    }
+    const propio = basename(this.archivoBuzon(chat));
+    const recogidos = [];
+    const pendientes = [];
+    for (const f of archivos) {
+      const ruta = join(carpeta, f);
+      const registros = await this.#registros(ruta);
+      const mios = f === propio ? registros : registros.filter((r) => r.chatAlt === chat);
+      if (mios.length === 0) continue;
+      recogidos.push(...mios);
+      pendientes.push({ ruta, resto: registros.filter((r) => !mios.includes(r)) });
+    }
+    if (recogidos.length === 0) return 0;
+    const { nuevos } = await this.guardarLoteDetallado(recogidos.map((m) => ({ ...m, chat })));
+    for (const { ruta, resto } of pendientes) await this.#reescribirOBorrar(ruta, resto);
+    const primero = recogidos.map((m) => m.fecha).filter(Boolean).sort()[0];
+    if (primero) await this.vigilados.ajustarDesde?.(chat, primero);
+    return nuevos;
+  }
+
+  // Quita del buzón lo anterior al plazo. Devuelve cuántos mensajes borró.
+  async limpiarBuzon({ dias = 120, ahora = Date.now() } = {}) {
+    const limite = ahora - dias * 24 * 3600 * 1000;
+    let borrados = 0;
+    let archivos = [];
+    try {
+      archivos = (await readdir(join(this.dir, 'buzon'))).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      return { borrados };
+    }
+    for (const f of archivos) {
+      const ruta = join(this.dir, 'buzon', f);
+      const registros = await this.#registros(ruta);
+      const vigentes = registros.filter((r) => Date.parse(r.fecha) >= limite);
+      if (vigentes.length === registros.length) continue;
+      borrados += registros.length - vigentes.length;
+      await this.#reescribirOBorrar(ruta, vigentes);
+    }
+    return { borrados };
+  }
+
+  async #reescribirOBorrar(ruta, registros) {
+    if (registros.length === 0) {
+      await unlink(ruta).catch(() => {});
+      return;
+    }
+    const temporal = `${ruta}.tmp`;
+    await writeFile(temporal, registros.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    await rename(temporal, ruta);
   }
 
   // El chat vigilado al que pertenece un mensaje: el directo, o el alterno (la otra forma del id
@@ -42,15 +142,16 @@ export class Almacen {
   async guardarLoteDetallado(mensajes) {
     const vigilados = new Set(await this.vigilados.lista());
     const total = { nuevos: 0, actualizados: 0 };
-    if (vigilados.size === 0) return total;
     const porChat = new Map();
+    const aBuzon = [];
     for (const m of mensajes) {
       if (!m) continue;
       const chat = vigilados.has(m.chat) ? m.chat : m.chatAlt && vigilados.has(m.chatAlt) ? m.chatAlt : null;
-      if (!chat) continue;
+      if (!chat) { aBuzon.push(m); continue; }
       if (!porChat.has(chat)) porChat.set(chat, []);
       porChat.get(chat).push({ ...m, chat });
     }
+    if (aBuzon.length > 0) await this.guardarEnBuzon(aBuzon);
     for (const [chat, lista] of porChat) {
       await mkdir(this.dir, { recursive: true });
       const ruta = this.archivo(chat);

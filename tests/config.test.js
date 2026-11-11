@@ -25,6 +25,7 @@ test('leerConfig devuelve el objeto con todas las variables', () => {
     geminiKey: 'gk',
     geminiModel: 'gemini-x',
     panelHosts: [],
+    buzonDias: 120,
     evolution: { url: 'http://127.0.0.1:8080', apiKey: 'ek', instancia: 'inst' },
   });
 });
@@ -36,6 +37,13 @@ test('leerConfig aplica valores por omisión y lee PANEL_HOSTS', () => {
   assert.equal(c.datosDir, './datos');
   assert.equal(c.geminiModel, 'gemini-3.1-flash-lite');
   assert.deepEqual(c.panelHosts, ['a.dev', 'b.dev']);
+});
+
+test('leerConfig lee BUZON_DIAS y rechaza valores que no sean enteros positivos', () => {
+  assert.equal(leerConfig({ ...ENV, BUZON_DIAS: '30' }).buzonDias, 30);
+  for (const malo of ['0', '-5', 'abc', '1.5']) {
+    assert.throws(() => leerConfig({ ...ENV, BUZON_DIAS: malo }), (e) => e.message.includes('BUZON_DIAS'));
+  }
 });
 
 for (const falta of ['SECRETO_WEBHOOK', 'GEMINI_API_KEY', 'EVOLUTION_API_URL', 'EVOLUTION_API_KEY', 'EVOLUTION_INSTANCE']) {

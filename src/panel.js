@@ -7,7 +7,7 @@ import pkg from '../package.json' with { type: 'json' };
 const AVISO_DESCONECTADO = 'WhatsApp está desconectado: no se puede cargar la lista de contactos. Los chats vigilados y sus reportes siguen disponibles.';
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
-export function crearPanel({ vigilados, evolution, generar }) {
+export function crearPanel({ vigilados, evolution, generar, almacen }) {
   return async function manejar({ metodo, ruta, cuerpo }) {
     if (metodo === 'GET' && ruta === '/') {
       const lista = await vigilados.lista();
@@ -23,9 +23,14 @@ export function crearPanel({ vigilados, evolution, generar }) {
     if (metodo === 'POST' && ruta === '/vigilar') {
       const { chat, activo } = cuerpo ?? {};
       if (typeof chat !== 'string' || !chat) return { estado: 400, cuerpo: { error: 'chat requerido' } };
-      if (activo) await vigilados.activar(chat);
-      else await vigilados.desactivar(chat);
-      return { estado: 200, cuerpo: { ok: true } };
+      if (!activo) {
+        await vigilados.desactivar(chat);
+        return { estado: 200, cuerpo: { ok: true } };
+      }
+      await vigilados.activar(chat);
+      // Lo que ya había llegado de este chat (antes de vigilarlo) pasa a su almacén.
+      const recuperados = almacen ? await almacen.promover(chat) : 0;
+      return { estado: 200, cuerpo: { ok: true, recuperados } };
     }
 
     if (metodo === 'POST' && ruta === '/resumen') {

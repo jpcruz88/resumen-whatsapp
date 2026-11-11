@@ -47,6 +47,13 @@ export class Vigilados {
   }
 
   // Cuándo se empezó a vigilar el chat (ISO), o null si no se sabe.
+  // Retrocede "vigilado desde" cuando se recupera un pasado anterior; nunca lo adelanta.
+  async ajustarDesde(jid, iso) {
+    const { chats, desde } = this.#leerTodo();
+    if (!chats.includes(jid) || !(Date.parse(iso) < Date.parse(desde[jid] ?? iso))) return;
+    this.#escribir(chats, { ...desde, [jid]: new Date(iso).toISOString() });
+  }
+
   async desdeDe(jid) {
     return this.#leerTodo().desde[jid] ?? null;
   }

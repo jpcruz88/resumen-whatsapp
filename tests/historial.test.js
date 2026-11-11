@@ -111,11 +111,11 @@ test('guardarLote resuelve el chat por el id alterno y guarda bajo el chat vigil
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('guardarLote no escribe ningún archivo si ningún chat está vigilado', async () => {
+test('guardarLote no escribe ningún archivo de chat si ninguno está vigilado (solo el buzón)', async () => {
   const { dir, almacen } = await montar();
   try {
     assert.equal(await almacen.guardarLote(parsearHistorial(lote(msg({ id: '1', texto: 'x' })))), 0);
-    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json'), []);
+    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json' && f !== 'buzon'), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -145,7 +145,7 @@ test('el webhook rechaza un lote messages.set sin la apikey', async () => {
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('un lote grande de chats no vigilados se descarta rápido y sin escribir nada', async () => {
+test('un lote grande de chats no vigilados va al buzón rápido y no toca el almacén de chats', async () => {
   const { dir, enviar } = await montar(NUMERO);
   try {
     const muchos = Array.from({ length: 6000 }, (_, i) => msg({ id: `m${i}`, jid: `52155000${String(i % 500).padStart(5, '0')}@s.whatsapp.net`, texto: 'x' }));
@@ -153,7 +153,7 @@ test('un lote grande de chats no vigilados se descarta rápido y sin escribir na
     const r = await enviar(lote(...muchos));
     assert.equal(r.cuerpo.guardados, 0);
     assert.ok(Date.now() - t0 < 3000, 'debe tardar menos de 3 s');
-    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json'), []);
+    assert.deepEqual((await readdir(dir)).filter((f) => f !== 'vigilados.json' && f !== 'buzon'), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

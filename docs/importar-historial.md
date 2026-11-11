@@ -1,14 +1,18 @@
 # Importar el historial de un chat
 
-Por defecto el servicio guarda los mensajes que llegan **después** de marcar un chat como vigilado.
-Para poder resumir fechas anteriores hay que importar el historial que WhatsApp manda **una sola vez,
-cuando se vincula un dispositivo**. Evolution no guarda historial; este servicio lo recibe por el webhook
-(evento `MESSAGES_SET`), se queda solo con el de los chats vigilados y descarta el resto.
+Los mensajes de un chat **vigilado** se guardan completos (texto, audios e imágenes). Los de los demás chats no se
+resumen ni se pueden ver, pero **su texto se guarda aparte, en un buzón temporal** (`datos/buzon`, `BUZON_DIAS` días,
+120 por omisión), junto con los datos para volver a pedir sus audios e imágenes. Cuando marcas un chat como vigilado,
+todo lo que ya estaba en el buzón pasa a ese chat: el reporte y la conversación incluyen su pasado desde el primer
+momento. Los audios e imágenes de ese pasado se cargan con el botón **Cargar**.
+
+El historial que WhatsApp manda **una sola vez, cuando se vincula un dispositivo**, también entra al buzón. Evolution
+no guarda historial; este servicio lo recibe por el webhook (evento `MESSAGES_SET`).
 
 ## Antes de empezar
 
-1. Abre el panel y **marca todos los chats y grupos cuyo historial quieras**. Lo que no esté vigilado en el
-   momento de vincular se descarta y no se puede recuperar sin volver a vincular.
+1. Si ya vigilas chats, no hace falta marcar nada antes: el resto de los chats se guarda en el buzón y se recupera al
+   vigilarlos.
 2. Ten el teléfono a la mano: hay que escanear un QR.
 
 ## Pasos
@@ -60,6 +64,6 @@ guarda para siempre en este equipo.
   y las imágenes con pie de foto conservan el pie.
 - **La profundidad la decide WhatsApp.** Con `syncFullHistory` manda más que por defecto, pero no se puede
   asegurar hasta qué fecha. Si pides un periodo más viejo de lo que llegó, el reporte sale sin mensajes.
-- **Un chat que no estaba vigilado al vincular** no tiene historial importado. Para traerlo hay que marcarlo
-  y repetir los pasos.
+- **Antes de que existiera el buzón (versión 0.8.0)** el historial de los chats no vigilados se descartaba. Ese
+  pasado solo vuelve vinculando de nuevo; desde la 0.8.0 todo lo que llega queda en el buzón.
 - Volver a vincular es seguro: los mensajes ya guardados no se duplican.

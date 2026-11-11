@@ -48,11 +48,12 @@ Las imágenes y los audios que llegaron **después** de vigilar el chat ya está
 
 ## Historial anterior
 
-Para resumir fechas previas a vigilar un chat hay que importar el historial al vincular WhatsApp: ver `docs/importar-historial.md`.
+Al vigilar un chat se recupera lo que ya había llegado de él (buzón, ver `docs/importar-historial.md`).
 
 ## Privacidad
 
-- Solo se guardan los chats que activas en el panel (lista `vigilados.json` en `DATOS_DIR`).
+- Los chats que activas en el panel (`vigilados.json`) se guardan completos: texto, audios e imágenes, sin límite de tiempo.
+- Los demás chats solo dejan su texto y los datos de descarga en un buzón local (`DATOS_DIR/buzon`) durante `BUZON_DIAS` días (120 por omisión). No se ven, no se resumen y no se envían a Gemini; pasan al chat solo cuando lo vigilas.
 - Los mensajes, medios y reportes quedan en `DATOS_DIR` (en `.gitignore`). Nunca se suben al repo.
 - Los textos se envían a Gemini para resumir. Revisa tu política de uso de la API.
 
