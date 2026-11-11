@@ -243,10 +243,12 @@ export async function arrancar(env = process.env) {
 
   const servidor = crearServidorHttp({ manejar });
 
-  // El buzón de chats no vigilados guarda solo cfg.buzonDias días: se limpia al arrancar y cada día.
+  // El buzón de chats no vigilados se conserva siempre; con BUZON_DIAS > 0 se limpia al arrancar y cada día.
   const limpiar = () => almacen.limpiarBuzon({ dias: cfg.buzonDias }).then((r) => r.borrados > 0 && console.log('buzón: borrados', r.borrados, 'mensajes viejos'), () => {});
-  limpiar();
-  setInterval(limpiar, 24 * 3600 * 1000).unref();
+  if (cfg.buzonDias > 0) {
+    limpiar();
+    setInterval(limpiar, 24 * 3600 * 1000).unref();
+  }
 
   servidor.listen(puerto, '127.0.0.1', () => {
     console.log(`escuchando en 127.0.0.1:${puerto}`);
