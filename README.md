@@ -53,7 +53,7 @@ Al vigilar un chat se recupera lo que ya había llegado de él (buzón, ver `doc
 ## Privacidad
 
 - Los chats que activas en el panel (`vigilados.json`) se guardan completos: texto, audios e imágenes, sin límite de tiempo.
-- Los demás chats solo dejan su texto y los datos de descarga en un buzón local (`DATOS_DIR/buzon`) (siempre; con `BUZON_DIAS` > 0, solo esos días). No se ven, no se resumen y no se envían a Gemini; pasan al chat solo cuando lo vigilas.
+- Los demás chats dejan su texto y, desde que se vinculó, sus audios e imágenes en `DATOS_DIR/buzon` y `DATOS_DIR/media` (siempre; con `BUZON_DIAS` > 0 el texto se borra pasados esos días). No se ven, no se resumen y no se envían a Gemini hasta que vigilas el chat. Los archivos ocupan disco: revisa `DATOS_DIR/media`.
 - Los mensajes, medios y reportes quedan en `DATOS_DIR` (en `.gitignore`). Nunca se suben al repo.
 - Los textos se envían a Gemini para resumir. Revisa tu política de uso de la API.
 

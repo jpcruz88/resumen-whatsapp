@@ -2,7 +2,8 @@
 
 Los mensajes de un chat **vigilado** se guardan completos (texto, audios e imágenes). Los de los demás chats no se
 resumen ni se pueden ver, pero **su texto se guarda aparte, en un buzón temporal** (`datos/buzon`, se conserva siempre
-salvo que fijes `BUZON_DIAS`), junto con los datos para volver a pedir sus audios e imágenes. Cuando marcas un chat como vigilado,
+salvo que fijes `BUZON_DIAS`), junto con los datos para volver a pedir sus audios e imágenes. Los audios e imágenes que **llegan en vivo** se descargan
+al llegar, de todos los chats, y quedan en `datos/media`. Cuando marcas un chat como vigilado,
 todo lo que ya estaba en el buzón pasa a ese chat: el reporte y la conversación incluyen su pasado desde el primer
 momento. Los audios e imágenes de ese pasado se cargan con el botón **Cargar**.
 

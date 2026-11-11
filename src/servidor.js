@@ -40,22 +40,30 @@ export function crearManejador({ almacen, secreto, evolution }) {
         return { estado: 200, cuerpo: { ok: true, guardados: nuevos, actualizados } };
       }
       const m = parsearEventoEvolution(cuerpo);
+      if (!m) return { estado: 200, cuerpo: { ok: true } };
       // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
-      // Lo de chats no vigilados no se descarta: va al buzón (solo texto y datos de descarga).
-      const chat = m ? await almacen.resolverChat(m) : null;
-      if (m && !chat) await almacen.guardarEnBuzon([m]);
-      if (m) m.chat = chat;
-      if (chat && (await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+      // Lo de chats no vigilados no se descarta: va al buzón (texto, datos de descarga y, al llegar, su archivo).
+      const vigilado = await almacen.resolverChat(m);
+      const chatOriginal = m.chat;
+      let guardado;
+      if (vigilado) {
+        m.chat = vigilado;
+        guardado = await almacen.guardar(m);
+      } else {
+        guardado = (await almacen.guardarEnBuzon([m])) > 0;
+      }
+      if (guardado && (m.tipo === 'audio' || m.tipo === 'imagen')) {
+        const chat = vigilado ?? chatOriginal;
         // Con webhook.base64 el medio viaja en el payload: no se descarga nada de Evolution.
         const embebido = m.base64 ? Buffer.from(m.base64, 'base64') : null;
         try {
           if (embebido && embebido.length > 0) {
-            await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype, buffer: embebido });
+            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype, buffer: embebido, buzon: !vigilado });
           } else if (evolution) {
             // Respaldo: sin base64 en el payload. El mimetype parseado manda (reportar lo usa para
             // leer); el de Evolution es el respaldo.
-            const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, m.chat);
-            await almacen.guardarMedio({ chat: m.chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer });
+            const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, chat);
+            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer, buzon: !vigilado });
           }
         } catch {
           // No se registra el texto del error: puede contener URLs, claves o el contenido.

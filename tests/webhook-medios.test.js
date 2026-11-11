@@ -74,13 +74,13 @@ test('audio de chat vigilado: descarga y guarda el archivo', async () => {
   }
 });
 
-test('audio de chat no vigilado: no descarga', async () => {
+test('audio de chat no vigilado: también se descarga al llegar (queda en el buzón)', async () => {
   const evo = falso();
   const { dir, enviar } = await montar(evo);
   try {
     const r = await enviar(eventoAudio(CHAT_NO));
     assert.equal(r.estado, 200);
-    assert.equal(evo.llamadas.length, 0);
+    assert.equal(evo.llamadas.length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -168,14 +168,14 @@ test('imagen con base64 en data.base64: guarda esos bytes y no descarga', async 
   }
 });
 
-test('base64 en un chat no vigilado: no guarda nada', async () => {
+test('base64 en un chat no vigilado: guarda el archivo sin pedirlo a Evolution', async () => {
   const evo = falso();
   const { dir, enviar } = await montar(evo);
   try {
     const ev = eventoAudio(CHAT_NO);
     ev.data.message.base64 = Buffer.from('x').toString('base64');
     await enviar(ev);
-    await assert.rejects(readdir(join(dir, 'media')));
+    assert.equal((await readdir(join(dir, 'media'))).length, 1);
     assert.equal(evo.llamadas.length, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });

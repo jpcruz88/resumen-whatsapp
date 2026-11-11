@@ -237,9 +237,10 @@ export class Almacen {
     }
   }
 
-  // Guarda el archivo de un mensaje de un chat vigilado en rutaMedio().
-  async guardarMedio({ chat, mediaId, mimetype, buffer }) {
-    if (!(await this.vigilados.esVigilado(chat))) return null;
+  // Guarda el archivo de un mensaje en rutaMedio(). Solo de chats vigilados, salvo buzon: true (lo que llega de
+  // un chat aún no vigilado: el archivo se guarda al llegar y se ve cuando se vigila el chat).
+  async guardarMedio({ chat, mediaId, mimetype, buffer, buzon = false }) {
+    if (!buzon && !(await this.vigilados.esVigilado(chat))) return null;
     const ruta = this.rutaMedio({ mediaId, mimetype });
     await mkdir(join(this.dir, 'media'), { recursive: true });
     await writeFile(ruta, buffer);

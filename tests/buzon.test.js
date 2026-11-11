@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, rm, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Almacen } from '../src/almacen.js';
@@ -71,7 +71,7 @@ test('al vigilar un chat se recupera todo lo que ya había llegado, con audios e
   } finally { await limpiar(dir); }
 });
 
-test('un mensaje en vivo de un chat no vigilado entra al buzón sin guardar su archivo', async () => {
+test('un mensaje en vivo de un chat no vigilado entra al buzón y su archivo se descarga al llegar', async () => {
   const { dir, almacen, vigilados, enviar } = await montar();
   try {
     const m = msg({ id: 'v1', imagen: 'foto', ts: ts('2026-11-11T10:00:00Z') });
@@ -84,8 +84,10 @@ test('un mensaje en vivo de un chat no vigilado entra al buzón sin guardar su a
     assert.equal(guardado.id, 'v1');
     assert.equal(guardado.sinMedio, true);
     assert.equal('base64' in guardado, false);
-    assert.equal(JSON.stringify(guardado).includes('JPEGDATA'), false);
-    assert.equal((await readdir(dir)).includes('media'), false, 'no se descargó ningún archivo');
+    assert.equal(JSON.stringify(guardado).includes('JPEGDATA'), false, 'el base64 no entra al JSONL');
+    const hallado = await almacen.localizarMedio({ mediaId: guardado.mediaId, mimetype: guardado.mimetype });
+    assert.ok(hallado, 'el archivo quedó guardado desde que llegó');
+    assert.equal((await readFile(hallado.ruta)).toString(), 'JPEGDATA');
   } finally { await limpiar(dir); }
 });
 
@@ -171,5 +173,32 @@ test('parsearHistorial sigue marcando sin medio y el buzón no cambia lo que se 
     assert.equal(ms[0].sinMedio, true);
     assert.deepEqual(await almacen.leer({ chat: OTRO }), []);
     assert.equal(await almacen.buscarMensaje({ chat: OTRO, id: 'q' }), null);
+  } finally { await limpiar(dir); }
+});
+
+test('el audio en vivo de un chat no vigilado también se descarga, y si no viene en el payload se pide a Evolution', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'buzon-'));
+  try {
+    const vigilados = new Vigilados({ archivo: join(dir, 'vigilados.json') });
+    const almacen = new Almacen({ dir, vigilados });
+    const pedidos = [];
+    const evolution = { descargarMedia: async (id, chat) => { pedidos.push([id, chat]); return { buffer: Buffer.from('OGGDATA'), mimetype: 'audio/ogg' }; } };
+    const manejar = crearManejador({ almacen, secreto: 'S', evolution });
+    const r = await manejar({ metodo: 'POST', ruta: '/webhook/evolution', cabeceras: { apikey: 'S' }, cuerpo: upsert(msg({ id: 'aud1', audio: true, ts: ts('2026-11-11T11:00:00Z') })) });
+    assert.equal(r.estado, 200);
+    assert.deepEqual(pedidos, [['aud1', OTRO]]);
+    const hallado = await almacen.localizarMedio({ mediaId: 'aud1', mimetype: 'audio/ogg; codecs=opus' });
+    assert.ok(hallado);
+  } finally { await limpiar(dir); }
+});
+
+test('los archivos del buzón no se pueden leer por la conversación mientras el chat no se vigile', async () => {
+  const { dir, almacen, enviar } = await montar();
+  try {
+    const m = msg({ id: 'priv', imagen: true });
+    m.message.base64 = Buffer.from('X').toString('base64');
+    await enviar(upsert(m));
+    assert.equal(await almacen.buscarMensaje({ chat: OTRO, id: 'priv' }), null);
+    assert.deepEqual(await almacen.leer({ chat: OTRO }), []);
   } finally { await limpiar(dir); }
 });
