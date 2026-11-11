@@ -285,3 +285,26 @@ test('GET / con chats vigilados ofrece "Ver conversación" junto a "Generar resu
     assert.match(html, /window\.open\('\/conversacion\?'/, 'el script abre la conversación del periodo elegido');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('GET / abre igual si Evolution no responde: muestra los vigilados y avisa que falta la lista de contactos', async () => {
+  const { dir, panel, vigilados } = await montar({
+    evolution: { listarChats: async () => { throw new Error('fetch failed'); } },
+  });
+  try {
+    await vigilados.activar(JID);
+    const r = await panel({ metodo: 'GET', ruta: '/' });
+    assert.equal(r.estado, 200);
+    const lista = r.html.match(/<ul[^>]*id="lista-vigilados"[^>]*>([\s\S]*?)<\/ul>/)[1];
+    assert.ok(lista.includes(JID), 'el vigilado sigue en la lista');
+    assert.match(r.html, /<select[^>]*id="chat"/);
+    assert.match(r.html, /<p id="aviso" class="msg error" role="alert">[^<]*WhatsApp[^<]*desconectado[^<]*<\/p>/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('GET / con Evolution sano no muestra el aviso de desconexión', async () => {
+  const { dir, panel } = await montar();
+  try {
+    const { html } = await panel({ metodo: 'GET', ruta: '/' });
+    assert.match(html, /<p id="aviso" class="msg error" role="alert" hidden><\/p>/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

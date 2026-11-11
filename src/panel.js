@@ -4,13 +4,20 @@ import { pagina } from './panel-pagina.js';
 import { inicioDelDia, finDelDia } from './fechas.js';
 import pkg from '../package.json' with { type: 'json' };
 
+const AVISO_DESCONECTADO = 'WhatsApp está desconectado: no se puede cargar la lista de contactos. Los chats vigilados y sus reportes siguen disponibles.';
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 export function crearPanel({ vigilados, evolution, generar }) {
   return async function manejar({ metodo, ruta, cuerpo }) {
     if (metodo === 'GET' && ruta === '/') {
-      const chats = await evolution.listarChats();
-      return { estado: 200, html: pagina(chats, await vigilados.lista(), pkg.version) };
+      const lista = await vigilados.lista();
+      try {
+        return { estado: 200, html: pagina(await evolution.listarChats(), lista, pkg.version) };
+      } catch {
+        // Evolution parado o WhatsApp desvinculado: el panel abre con los chats ya vigilados, sin la lista de contactos.
+        const guardados = lista.map((jid) => ({ jid }));
+        return { estado: 200, html: pagina(guardados, lista, pkg.version, AVISO_DESCONECTADO) };
+      }
     }
 
     if (metodo === 'POST' && ruta === '/vigilar') {

@@ -392,7 +392,7 @@ function fila(c, vigilado) {
 </li>`;
 }
 
-export function pagina(chats, vigilados, version) {
+export function pagina(chats, vigilados, version, aviso = '') {
   const vig = new Set(vigilados);
   const deLaLista = chats.filter((c) => vig.has(c.jid));
   const resto = chats.filter((c) => !vig.has(c.jid));
@@ -451,7 +451,7 @@ ${opciones}
 <button type="button" class="pestana" role="tab" id="t-chats" data-vista="chats" aria-controls="vista-chats" aria-selected="false">Chats</button>
 </div>
 </div></header>
-<div class="aviso-global"><p id="aviso" class="msg error" role="alert" hidden></p></div>
+<div class="aviso-global"><p id="aviso" class="msg error" role="alert"${aviso ? '' : ' hidden'}>${escaparHtml(aviso)}</p></div>
 <main>
 <section class="panel" id="vista-resumen" role="tabpanel" aria-labelledby="t-resumen" data-activa="true">
 <h2>Generar resumen</h2>
