@@ -29,6 +29,32 @@ function enLinea(texto) {
     .replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, '$1<em>$2</em>');
 }
 
+// Resumen estructurado { tareas, temas, personal }: las tareas en una tabla y los temas en dos columnas.
+export function resumenAHtml({ tareas, temas, personal }) {
+  const fila = (t) => `<tr>
+<td data-etiqueta="Tarea">${escaparHtml(t.tarea)}</td>
+<td data-etiqueta="Pidió">${escaparHtml(t.quien) || '—'}</td>
+<td data-etiqueta="Cuándo">${t.cuando ? conCitas(escaparHtml(t.cuando)) : '—'}</td>
+</tr>`;
+  const bloqueTareas = tareas.length === 0
+    ? '<p class="ninguna">Ninguna tarea en este periodo.</p>'
+    : `<table class="tareas">
+<thead><tr><th scope="col">Tarea</th><th scope="col">Pidió</th><th scope="col">Cuándo</th></tr></thead>
+<tbody>
+${tareas.map(fila).join('\n')}
+</tbody>
+</table>`;
+  const lista = (items, vacio) => (items.length === 0
+    ? `<p class="ninguna">${vacio}</p>`
+    : `<ul class="temas">${items.map((x) => `<li>${x.titulo ? `<strong>${escaparHtml(x.titulo)}</strong>` : ''}${x.detalle ? `<p>${enLinea(escaparHtml(x.detalle))}</p>` : ''}</li>`).join('')}</ul>`);
+  return `<section class="bloque-tareas"><h2>Tareas que me pidieron <span class="cuenta">${tareas.length}</span></h2>
+${bloqueTareas}</section>
+<div class="columnas">
+<section class="columna"><h2>Temas de trabajo <span class="cuenta">${temas.length}</span></h2>${lista(temas, 'Sin temas de trabajo.')}</section>
+<section class="columna"><h2>Personal <span class="cuenta">${personal.length}</span></h2>${lista(personal, 'Nada personal.')}</section>
+</div>`;
+}
+
 export function markdownAHtml(md) {
   const salida = [];
   let lista = false;
@@ -55,6 +81,7 @@ export function markdownAHtml(md) {
 }
 
 const CSS = BASE_CSS + `
+.pagina.ancha{max-width:68rem}
 header{margin:4px 0 0}
 h1{margin:4px 0 6px;font-size:1.6rem;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere}
 .meta{margin:0;color:var(--suave);font-size:.95rem}
@@ -71,21 +98,49 @@ p{margin:10px 0}
 .vacio{margin:16px 0 8px;padding:16px;background:var(--sup2);border-radius:10px}
 .vacio p{margin:0 0 8px}
 .vacio p:last-child{margin:0;color:var(--suave)}
+.cuenta{margin-left:6px;color:var(--suave);font-size:.9rem;font-weight:500;font-variant-numeric:tabular-nums}
+.bloque-tareas>h2{margin-top:12px;padding-top:0;border-top:0}
+table.tareas{width:100%;border-collapse:collapse;margin:4px 0 8px}
+table.tareas th{padding:8px 12px 8px 0;text-align:left;font-size:.85rem;font-weight:600;color:var(--suave);border-bottom:1px solid var(--borde)}
+table.tareas td{padding:12px 12px 12px 0;vertical-align:top;border-bottom:1px solid var(--borde);overflow-wrap:anywhere}
+table.tareas tr:last-child td{border-bottom:0}
+table.tareas td[data-etiqueta="Tarea"]{width:56%;font-weight:600}
+table.tareas td[data-etiqueta="Cuándo"]{white-space:nowrap}
+.ninguna{margin:6px 0 4px;color:var(--suave)}
+.columnas{display:grid;grid-template-columns:1fr;gap:0 40px}
+.columna>h2{margin-top:24px}
+ul.temas{list-style:none;margin:6px 0;padding:0}
+ul.temas li{margin:0;padding:12px 0;border-bottom:1px solid var(--borde)}
+ul.temas li:last-child{border-bottom:0}
+ul.temas p{margin:2px 0 0;color:var(--suave)}
+@media(min-width:800px){.columnas{grid-template-columns:1fr 1fr}.columna>h2{padding-top:16px}}
+@media(max-width:640px){
+table.tareas thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+table.tareas,table.tareas tbody,table.tareas tr,table.tareas td{display:block;width:auto}
+table.tareas tr{padding:12px 0;border-bottom:1px solid var(--borde)}
+table.tareas tr:last-child{border-bottom:0}
+table.tareas td{padding:0;border:0}
+table.tareas td[data-etiqueta="Tarea"]{width:auto;margin-bottom:4px}
+table.tareas td[data-etiqueta="Pidió"],table.tareas td[data-etiqueta="Cuándo"]{display:inline;color:var(--suave);font-size:.9rem}
+table.tareas td[data-etiqueta="Pidió"]::before{content:"Pidió: "}
+table.tareas td[data-etiqueta="Pidió"]::after{content:" · "}
+}
 @media print{body{background:#fff;color:#000}.volver,.acciones{display:none}.contenido{border:0;padding:0}.pie{color:#444}}`;
 
 
 // mensajes: cuántos mensajes se resumieron. Con 0 no hay resumen y se explica por qué.
-export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, guardados, version, enlaceConversacion }) {
+export function renderReporte({ chat, nombre, desde, hasta, markdown, resumen, mensajes, guardados, version, enlaceConversacion }) {
   const titulo = escaparHtml(nombre || chat || 'Resumen');
   const periodo = escaparHtml(etiquetaPeriodo(desde, hasta));
-  const cuenta = Number.isInteger(mensajes) ? `${mensajes} ${mensajes === 1 ? 'mensaje' : 'mensajes'}` : '';
+  const resumenCuenta = resumen ? ` · ${resumen.tareas.length} ${resumen.tareas.length === 1 ? 'tarea' : 'tareas'} · ${resumen.temas.length} ${resumen.temas.length === 1 ? 'tema' : 'temas'} · ${resumen.personal.length} personal` : '';
+  const cuenta = Number.isInteger(mensajes) ? `${mensajes} ${mensajes === 1 ? 'mensaje' : 'mensajes'}${mensajes > 0 ? resumenCuenta : ''}` : '';
   const vacio = mensajes === 0;
   const desdeVigilar = guardados?.primero && guardados?.ultimo
     ? `Este chat tiene mensajes guardados ${escaparHtml(etiquetaRango(guardados.primero, guardados.ultimo))}. Prueba con otro periodo.`
     : 'Todavía no hay ningún mensaje guardado de este chat. Los que lleguen se guardan solos.';
   const cuerpo = vacio
     ? `<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>${desdeVigilar}</p></div>`
-    : markdownAHtml(markdown);
+    : resumen ? resumenAHtml(resumen) : markdownAHtml(markdown);
   const acciones = enlaceConversacion
     ? `<p class="acciones"><a class="boton-enlace" href="${escaparHtml(enlaceConversacion)}">${ICONO_CHAT}Ver conversación</a></p>`
     : '';
@@ -100,7 +155,7 @@ export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, 
 <style>${CSS}</style>
 </head>
 <body>
-<div class="pagina">
+<div class="pagina${resumen && !vacio ? ' ancha' : ''}">
 <a class="volver" href="/">${FLECHA_VOLVER}Volver al panel</a>
 <header>
 <h1>${titulo}</h1>

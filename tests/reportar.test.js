@@ -143,3 +143,18 @@ test('un audio del historial que ya se recuperó sí se transcribe en el resumen
   assert.equal(fetchFn.llamadas.filter((b) => b.includes('audio/ogg')).length, 1, 'el audio recuperado se manda a transcribir');
   assert.ok(fetchFn.llamadas.some((b) => b.includes('transcripcion') && !b.includes('anterior a la vigilancia')));
 });
+
+test('si Gemini devuelve el resumen estructurado, el reporte lo muestra en tabla y columnas', async () => {
+  const { base, vigilados, almacen } = await montar(true);
+  await almacen.guardar({ id: 'e1', chat: CHAT, tipo: 'texto', texto: 'ocupo 50 copias', fecha: '2026-11-09T10:00:00Z', propio: false });
+  const datos = { tareas: [{ tarea: 'Entregar 50 copias', quien: 'Ana', cuando: '[2026-11-09 10:00]' }], temas: [{ titulo: 'Imprenta', detalle: 'Se pidió una cotización.' }], personal: [] };
+  const fetchFn = async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(datos) }] } }] }), { status: 200 });
+  const { id } = await generarReporte({
+    chat: CHAT, desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
+    almacen, vigilados, medios: { apiKey: 'k', fetchFn }, dirReportes: join(base, 'r'),
+  });
+  const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
+  assert.match(html, /<table class="tareas">/);
+  assert.match(html, /Entregar 50 copias/);
+  assert.match(html, /<strong>Imprenta<\/strong>/);
+});

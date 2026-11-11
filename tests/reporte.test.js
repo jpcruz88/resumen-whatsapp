@@ -168,3 +168,42 @@ test('markdownAHtml reconoce las viñetas con negrita al inicio como etiqueta de
   const html = markdownAHtml('- **Normativa:** Se implementó la detección');
   assert.match(html, /<li><strong class="etiqueta">Normativa:<\/strong> Se implementó la detección<\/li>|<li><strong>Normativa:<\/strong> Se implementó/);
 });
+
+const RESUMEN = {
+  tareas: [
+    { tarea: 'Aplicar ajustes visuales al reporte', quien: 'Ana <b>', cuando: '[2026-11-10 13:22]' },
+    { tarea: 'Revisar la detección de imágenes', quien: 'Beto', cuando: '' },
+  ],
+  temas: [{ titulo: 'Infraestructura', detalle: 'Caídas nocturnas en el endpoint de precios.' }, { titulo: 'Normativa', detalle: 'Se marca error crítico.' }],
+  personal: [{ titulo: 'Cumpleaños', detalle: 'Reunión por el cumpleaños del Toro.' }],
+};
+
+test('renderReporte con resumen estructurado muestra las tareas en una tabla de tres columnas', () => {
+  const html = renderReporte({ chat: 'a@g.us', nombre: 'X', resumen: RESUMEN, mensajes: 344 });
+  assert.match(html, /<table class="tareas">/);
+  for (const col of ['Tarea', 'Pidió', 'Cuándo']) assert.match(html, new RegExp('<th[^>]*>' + col + '</th>'));
+  assert.equal((html.match(/<tbody>[\s\S]*?<\/tbody>/)[0].match(/<tr>/g) || []).length, 2);
+  assert.match(html, /<td data-etiqueta="Tarea">Aplicar ajustes visuales al reporte<\/td>/);
+  assert.match(html, /<td data-etiqueta="Pidió">Ana &lt;b&gt;<\/td>/);
+  assert.match(html, /<time class="cita" datetime="2026-11-10T13:22">10 nov, 13:22<\/time>/);
+  assert.ok(!html.includes('<b>'), 'todo se escapa');
+});
+
+test('renderReporte pone temas de trabajo y personal lado a lado, con título y detalle', () => {
+  const html = renderReporte({ chat: 'a@g.us', nombre: 'X', resumen: RESUMEN, mensajes: 344 });
+  const columnas = html.match(/<section class="columna"[\s\S]*?<\/section>/g);
+  assert.equal(columnas.length, 2);
+  assert.match(columnas[0], /Temas de trabajo/);
+  assert.match(columnas[0], /<strong>Infraestructura<\/strong>/);
+  assert.match(columnas[0], /Caídas nocturnas en el endpoint de precios\./);
+  assert.match(columnas[1], /Personal/);
+  assert.match(html, /2 tareas · 2 temas · 1 personal/);
+});
+
+test('renderReporte con listas vacías lo dice en vez de mostrar una tabla o columna vacía', () => {
+  const html = renderReporte({ chat: 'a@g.us', nombre: 'X', resumen: { tareas: [], temas: [], personal: [] }, mensajes: 4 });
+  assert.ok(!html.includes('<table'));
+  assert.match(html, /Ninguna tarea en este periodo\./);
+  assert.match(html, /Sin temas de trabajo\./);
+  assert.match(html, /Nada personal\./);
+});

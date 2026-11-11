@@ -136,9 +136,9 @@ test('el prompt incluye los mensajes y pide separar trabajo y personal', () => {
   ]);
   assert.match(p, /ocupo 50 copias para el lunes/);
   assert.match(p, /yo: listo, te las tengo/i);
-  assert.match(p, /Trabajo/);
-  assert.match(p, /Personal/);
-  assert.match(p, /Tareas/);
+  assert.match(p, /temas de trabajo/);
+  assert.match(p, /"personal"/);
+  assert.match(p, /"tareas"/);
 });
 
 test('el prompt usa la transcripcion del audio y la descripcion de la imagen', () => {
@@ -157,12 +157,13 @@ test('un audio sin textoMedia aparece como no procesado', () => {
   assert.doesNotMatch(p, /null/);
 });
 
-test('el prompt pide las dos categorias y la lista de tareas con fecha', () => {
+test('el prompt pide tareas, temas de trabajo y personal, y la fecha de cada tarea', () => {
   const p = construirPrompt([{ fecha: 'f', propio: false, tipo: 'texto', texto: 'hola' }]);
-  assert.match(p, /## Trabajo/);
-  assert.match(p, /## Personal/);
-  assert.match(p, /### Tareas que me pidieron/);
-  assert.match(p, /fecha/i);
+  assert.match(p, /"tareas"/);
+  assert.match(p, /"temas"/);
+  assert.match(p, /"personal"/);
+  assert.match(p, /\[AAAA-MM-DD HH:MM\]/);
+  assert.match(p, /"quien"/);
 });
 
 test('resumir llama a Gemini con la clave y devuelve el texto', async () => {
@@ -253,4 +254,30 @@ test('las instrucciones exigen citar fecha y hora en la misma forma y ya no dice
   const p = construirPrompt([{ fecha: new Date().toISOString(), propio: false, tipo: 'texto', texto: 'hola' }]);
   assert.match(p, /\[AAAA-MM-DD HH:MM\]/);
   assert.doesNotMatch(p, /fecha si aparece/i);
+});
+
+test('resumir pide JSON estructurado y devuelve las tres listas ya limpias', async () => {
+  let cuerpo;
+  const datos = {
+    tareas: [{ tarea: 'Entregar 50 copias', quien: 'Ana', cuando: '[2026-11-10 13:22]' }, { tarea: '   ', quien: 'x', cuando: '' }],
+    temas: [{ titulo: 'Imprenta', detalle: 'Se acordó la fecha.' }],
+    personal: [],
+  };
+  const fetchFn = async (url, opts) => {
+    cuerpo = JSON.parse(opts.body);
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(datos) }] } }] }), { status: 200 });
+  };
+  const r = await resumir({ mensajes: [{ fecha: 'x', propio: false, texto: 'ocupo 50 copias' }], apiKey: 'k', fetchFn });
+  assert.equal(cuerpo.generationConfig.responseMimeType, 'application/json');
+  assert.ok(cuerpo.generationConfig.responseSchema, 'manda el esquema');
+  assert.deepEqual(r, {
+    tareas: [{ tarea: 'Entregar 50 copias', quien: 'Ana', cuando: '[2026-11-10 13:22]' }],
+    temas: [{ titulo: 'Imprenta', detalle: 'Se acordó la fecha.' }],
+    personal: [],
+  });
+});
+
+test('si Gemini no devuelve JSON válido, resumir regresa el texto tal cual', async () => {
+  const fetchFn = async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '## Trabajo\n- algo' }] } }] }), { status: 200 });
+  assert.equal(await resumir({ mensajes: [{ fecha: 'x', propio: false, texto: 'a' }], apiKey: 'k', fetchFn }), '## Trabajo\n- algo');
 });

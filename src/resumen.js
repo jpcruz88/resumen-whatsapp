@@ -3,19 +3,44 @@ import { formatoLocal } from './fechas.js';
 
 const INSTRUCCIONES = `Eres un asistente que resume conversaciones de WhatsApp para su dueño.
 "yo" es el dueño; los demás son sus contactos.
-Responde en español, en este formato exacto:
-
-## Trabajo
-### Tareas que me pidieron
-- (tarea, quién la pidió, y la fecha y hora del mensaje donde se pidió, citadas tal cual en la forma [AAAA-MM-DD HH:MM]). Si no hay, escribe "Ninguna".
-### Temas de trabajo
-- (resumen corto por tema)
-
-## Personal
-- (resumen corto por tema; sin detalles sensibles innecesarios)
-
-Si un tema es ambiguo, ponlo en Personal y márcalo con (?).
+Responde en español, solo con JSON que tenga tres listas:
+- "tareas": lo que me pidieron hacer; lista vacía si no hay. Cada una con "tarea" (qué hay que hacer, en una frase corta que empiece con verbo), "quien" (quién la pidió) y "cuando" (la fecha y hora del mensaje donde se pidió, citada tal cual en la forma [AAAA-MM-DD HH:MM]).
+- "temas": temas de trabajo. Cada uno con "titulo" (de 2 a 5 palabras) y "detalle" (una o dos frases).
+- "personal": temas personales. Cada uno con "titulo" y "detalle"; sin detalles sensibles innecesarios.
+Si un tema es ambiguo, ponlo en "personal" y escribe (?) al final del detalle.
 No inventes nada que no esté en los mensajes.`;
+
+const ESQUEMA = (() => {
+  const cadena = { type: 'STRING' };
+  const lista = (propiedades) => ({
+    type: 'ARRAY',
+    items: { type: 'OBJECT', properties: propiedades, required: Object.keys(propiedades) },
+  });
+  return {
+    type: 'OBJECT',
+    properties: {
+      tareas: lista({ tarea: cadena, quien: cadena, cuando: cadena }),
+      temas: lista({ titulo: cadena, detalle: cadena }),
+      personal: lista({ titulo: cadena, detalle: cadena }),
+    },
+    required: ['tareas', 'temas', 'personal'],
+  };
+})();
+
+const limpio = (v) => (typeof v === 'string' ? v.trim() : '');
+
+// El JSON de Gemini, ya limpio; null si no tiene la forma pedida.
+function leerEstructura(texto) {
+  let d;
+  try { d = JSON.parse(texto); } catch { return null; }
+  if (!d || !Array.isArray(d.tareas) || !Array.isArray(d.temas) || !Array.isArray(d.personal)) return null;
+  const tema = (x) => ({ titulo: limpio(x?.titulo), detalle: limpio(x?.detalle) });
+  return {
+    tareas: d.tareas.map((x) => ({ tarea: limpio(x?.tarea), quien: limpio(x?.quien), cuando: limpio(x?.cuando) })).filter((x) => x.tarea),
+    temas: d.temas.map(tema).filter((x) => x.titulo || x.detalle),
+    personal: d.personal.map(tema).filter((x) => x.titulo || x.detalle),
+  };
+}
 
 // Se agrega solo cuando la conversación es de un grupo: ahí escriben varias personas.
 const NOTA_GRUPO = `
@@ -66,12 +91,13 @@ export async function resumir({
     headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       contents: [{ parts: [{ text: construirPrompt(mensajes) }] }],
-      generationConfig: { temperature: 0.2 },
+      generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: ESQUEMA },
     }),
   });
   if (!res.ok) throw new Error(`Gemini respondió ${res.status}`);
   const json = await res.json();
   const texto = json.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!texto) throw new Error('Gemini no devolvió texto');
-  return texto;
+  // Con la forma pedida: { tareas, temas, personal }. Si no, el texto tal cual (se muestra como Markdown).
+  return leerEstructura(texto) ?? texto;
 }

@@ -40,7 +40,7 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
 
   // A Gemini le llegan nombres de personas, no números internos de WhatsApp.
   const mapaNombres = await Promise.resolve(nombres?.()).catch(() => undefined);
-  const markdown = await resumir({ mensajes: conNombres(mensajes, mapaNombres), apiKey, model, fetchFn });
+  const salida = await resumir({ mensajes: conNombres(mensajes, mapaNombres), apiKey, model, fetchFn });
   // Si el periodo no tiene mensajes, el reporte dice de qué fechas sí hay.
   let guardados = null;
   if (mensajes.length === 0) {
@@ -49,7 +49,7 @@ export async function generarReporte({ chat, nombre, desde, hasta, almacen, vigi
   }
   const id = nuevoIdReporte(); // se conoce antes de escribir para que la conversación pueda volver a este reporte
   const enlaceConversacion = `/conversacion?${new URLSearchParams({ chat, desde, hasta, reporte: id })}`;
-  const html = renderReporte({ chat, nombre, desde, hasta, markdown, mensajes: mensajes.length, guardados, version: pkg.version, enlaceConversacion });
+  const html = renderReporte({ chat, nombre, desde, hasta, ...(typeof salida === 'string' ? { markdown: salida } : { resumen: salida }), mensajes: mensajes.length, guardados, version: pkg.version, enlaceConversacion });
   await guardarReporte({ dir: dirReportes, html, id });
   return { id, url: `/reportes/${id}` };
 }
