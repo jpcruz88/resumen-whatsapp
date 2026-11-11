@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
 // Uso: node src/cli.js --chat <JID> [--desde 2026-11-02] [--hasta 2026-11-09]
-// Genera el reporte y muestra su URL local. El chat debe estar vigilado.
+// Genera el reporte y muestra su URL local.
 import { join } from 'node:path';
 import { Almacen } from './almacen.js';
-import { Vigilados } from './vigilados.js';
+import { TodosLosChats } from './vigilados.js';
 import { leerConfig } from './config.js';
 import { generarReporte as generarReal } from './reportar.js';
 import { crearClienteEvolution } from './evolution.js';
@@ -20,7 +20,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, { ge
   if (!a.chat) throw new Error('Falta --chat <JID>');
   const cfg = leerConfig(env);
 
-  const vigilados = new Vigilados({ archivo: join(cfg.datosDir, 'vigilados.json') });
+  const vigilados = new TodosLosChats();
   const almacen = new Almacen({ dir: cfg.datosDir, vigilados });
   const { id } = await generarReporte({
     chat: a.chat,

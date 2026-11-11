@@ -1,20 +1,14 @@
 # Importar el historial de un chat
 
-Los mensajes de un chat **vigilado** se guardan completos (texto, audios e imágenes). Los de los demás chats no se
-resumen ni se pueden ver, pero **su texto se guarda aparte, en un buzón temporal** (`datos/buzon`, se conserva siempre
-salvo que fijes `BUZON_DIAS`), junto con los datos para volver a pedir sus audios e imágenes. Los audios e imágenes que **llegan en vivo** se descargan
-al llegar, de todos los chats, y quedan en `datos/media`. Cuando marcas un chat como vigilado,
-todo lo que ya estaba en el buzón pasa a ese chat: el reporte y la conversación incluyen su pasado desde el primer
-momento. Los audios e imágenes de ese pasado se cargan con el botón **Cargar**.
+Todos los chats se guardan: texto, datos para volver a pedir audios e imágenes y, de lo que llega en vivo, los archivos
+(`datos/media`). Evolution no guarda historial; este servicio lo recibe por el webhook (evento `MESSAGES_SET`).
 
-El historial que WhatsApp manda **una sola vez, cuando se vincula un dispositivo**, también entra al buzón. Evolution
-no guarda historial; este servicio lo recibe por el webhook (evento `MESSAGES_SET`).
+El historial que WhatsApp manda **una sola vez, cuando se vincula un dispositivo**, entra completo, de todos los chats.
+La profundidad la decide WhatsApp: en la última vinculación llegaron mensajes desde 2023.
 
 ## Antes de empezar
 
-1. Si ya vigilas chats, no hace falta marcar nada antes: el resto de los chats se guarda en el buzón y se recupera al
-   vigilarlos.
-2. Ten el teléfono a la mano: hay que escanear un QR.
+Ten el teléfono a la mano: hay que escanear un QR. Volver a vincular es seguro: los mensajes ya guardados no se duplican.
 
 ## Pasos
 
@@ -60,11 +54,10 @@ guarda para siempre en este equipo.
 
 ## Límites que conviene conocer
 
-- **El archivo no viene con el historial.** Los audios e imágenes anteriores a la vigilancia se recuperan a
+- **El archivo no viene con el historial.** Los audios e imágenes del historial se recuperan a
   petición con el botón Cargar (ver arriba). Mientras no se carguen, el reporte los marca como "no disponible"
   y las imágenes con pie de foto conservan el pie.
 - **La profundidad la decide WhatsApp.** Con `syncFullHistory` manda más que por defecto, pero no se puede
   asegurar hasta qué fecha. Si pides un periodo más viejo de lo que llegó, el reporte sale sin mensajes.
-- **Antes de que existiera el buzón (versión 0.8.0)** el historial de los chats no vigilados se descartaba. Ese
-  pasado solo vuelve vinculando de nuevo; desde la 0.8.0 todo lo que llega queda en el buzón.
+- **Antes de la versión 0.10.0** el historial de los chats que no se vigilaban se descartaba; vuelve vinculando de nuevo.
 - Volver a vincular es seguro: los mensajes ya guardados no se duplican.

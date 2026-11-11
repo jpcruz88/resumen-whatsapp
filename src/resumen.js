@@ -28,8 +28,8 @@ Si una tarea es para otra persona y no para mí, no la pongas en "Tareas que me 
 // (transcripción o descripción); si no hay nada, se marca como no procesado.
 function textoDe(m) {
   if ((m.tipo === 'audio' || m.tipo === 'imagen') && m.sinMedio && !m.textoMedia) {
-    // Historial de antes de vigilar: el archivo ya no se puede pedir, solo se conserva el texto.
-    return [m.texto, `[${m.tipo === 'audio' ? 'audio' : 'imagen'} anterior a la vigilancia: no disponible]`].filter(Boolean).join(' | ');
+    // Historial de WhatsApp: el archivo ya no se puede pedir, solo se conserva el texto.
+    return [m.texto, `[${m.tipo === 'audio' ? 'audio' : 'imagen'} del historial: no disponible]`].filter(Boolean).join(' | ');
   }
   if (m.tipo === 'audio' || m.tipo === 'imagen') {
     const partes = [m.texto, m.textoMedia].filter(Boolean);

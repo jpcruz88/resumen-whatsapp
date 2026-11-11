@@ -86,7 +86,7 @@ test('sin mensajes en el periodo el reporte dice de qué fechas sí hay y no lla
   assert.match(html, /Este chat tiene mensajes guardados del 29 de julio al 5 de octubre de 2026/);
 });
 
-test('un audio anterior a la vigilancia no se transcribe ni se pide a Evolution', async () => {
+test('un audio del historial no se transcribe ni se pide a Evolution', async () => {
   const { base, vigilados, almacen } = await montar(true);
   await almacen.guardar({ id: 'h1', chat: CHAT, tipo: 'audio', texto: null, mediaId: 'MH', mimetype: 'audio/ogg', fecha: '2026-11-09T10:00:00Z', propio: false, sinMedio: true });
   await almacen.guardar({ id: 'h2', chat: CHAT, tipo: 'texto', texto: 'hola', fecha: '2026-11-09T10:01:00Z', propio: false });
@@ -99,7 +99,7 @@ test('un audio anterior a la vigilancia no se transcribe ni se pide a Evolution'
   });
   assert.equal(descargas, 0);
   assert.equal(fetchFn.llamadas.filter((b) => b.includes('audio/ogg')).length, 0, 'no se manda ningún audio a Gemini');
-  assert.ok(fetchFn.llamadas.some((b) => b.includes('[audio anterior a la vigilancia: no disponible]')));
+  assert.ok(fetchFn.llamadas.some((b) => b.includes('[audio del historial: no disponible]')));
   await readFile(join(base, 'r', `${id}.html`), 'utf8');
 });
 

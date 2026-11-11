@@ -159,18 +159,18 @@ test('un lote grande de chats no vigilados va al buzón rápido y no toca el alm
 
 // ---------- prompt ----------
 
-test('el prompt marca los audios e imágenes anteriores a la vigilancia como no disponibles', () => {
+test('el prompt marca los audios e imágenes del historial como no disponibles', () => {
   const p = construirPrompt([
     { fecha: '2026-11-01T15:00:00.000Z', propio: false, tipo: 'audio', texto: null, sinMedio: true },
     { fecha: '2026-11-01T15:01:00.000Z', propio: false, tipo: 'imagen', texto: 'la factura', sinMedio: true },
   ]);
-  assert.match(p, /\[audio anterior a la vigilancia: no disponible\]/);
-  assert.match(p, /la factura \| \[imagen anterior a la vigilancia: no disponible\]/);
+  assert.match(p, /\[audio del historial: no disponible\]/);
+  assert.match(p, /la factura \| \[imagen del historial: no disponible\]/);
   assert.ok(!p.includes('[audio no procesado]'));
 });
 
-test('si el audio anterior a la vigilancia ya tiene transcripción, el prompt usa la transcripción y no el aviso', () => {
+test('si el audio del historial ya tiene transcripción, el prompt usa la transcripción y no el aviso', () => {
   const p = construirPrompt([{ fecha: '2026-11-01T15:00:00.000Z', propio: false, tipo: 'audio', texto: null, sinMedio: true, textoMedia: 'necesito la cotización' }]);
   assert.match(p, /necesito la cotización/);
-  assert.ok(!p.includes('anterior a la vigilancia: no disponible'));
+  assert.ok(!p.includes('del historial: no disponible'));
 });

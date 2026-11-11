@@ -7,7 +7,7 @@ import { stat } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { parsearEventoEvolution, parsearHistorial } from './parse.js';
 import { Almacen } from './almacen.js';
-import { Vigilados } from './vigilados.js';
+import { TodosLosChats } from './vigilados.js';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { crearPanel } from './panel.js';
@@ -40,7 +40,7 @@ export function crearManejador({ almacen, secreto, evolution }) {
         return { estado: 200, cuerpo: { ok: true } };
       }
       if (cuerpo?.event === 'messages.set') {
-        // Historial al vincular: el de los chats vigilados se guarda completo; el resto va al buzón.
+        // Historial al vincular: se guarda el de todos los chats.
         const recibidos = parsearHistorial(cuerpo);
         const { nuevos, actualizados } = await almacen.guardarLoteDetallado(recibidos);
         if (recibidos.length > 0) console.log('historial importado:', nuevos, 'de', recibidos.length, `(${actualizados} completados con datos de descarga)`);
@@ -48,29 +48,21 @@ export function crearManejador({ almacen, secreto, evolution }) {
       }
       const m = parsearEventoEvolution(cuerpo);
       if (!m) return { estado: 200, cuerpo: { ok: true } };
-      // Todo (guardar, medio, descarga) va bajo el mismo chat vigilado, sea el directo o el alterno.
-      // Lo de chats no vigilados no se descarta: va al buzón (texto, datos de descarga y, al llegar, su archivo).
-      const vigilado = await almacen.resolverChat(m);
-      const chatOriginal = m.chat;
-      let guardado;
-      if (vigilado) {
-        m.chat = vigilado;
-        guardado = await almacen.guardar(m);
-      } else {
-        guardado = (await almacen.guardarEnBuzon([m])) > 0;
-      }
-      if (guardado && (m.tipo === 'audio' || m.tipo === 'imagen')) {
-        const chat = vigilado ?? chatOriginal;
+      // Todo (guardar, medio, descarga) va bajo el mismo chat. Estados, difusiones y canales no son chats.
+      const chat = await almacen.resolverChat(m);
+      if (!chat) return { estado: 200, cuerpo: { ok: true } };
+      m.chat = chat;
+      if ((await almacen.guardar(m)) && (m.tipo === 'audio' || m.tipo === 'imagen')) {
         // Con webhook.base64 el medio viaja en el payload: no se descarga nada de Evolution.
         const embebido = m.base64 ? Buffer.from(m.base64, 'base64') : null;
         try {
           if (embebido && embebido.length > 0) {
-            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype, buffer: embebido, buzon: !vigilado });
+            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype, buffer: embebido });
           } else if (evolution) {
             // Respaldo: sin base64 en el payload. El mimetype parseado manda (reportar lo usa para
             // leer); el de Evolution es el respaldo.
             const { buffer, mimetype } = await evolution.descargarMedia(m.mediaId, chat);
-            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer, buzon: !vigilado });
+            await almacen.guardarMedio({ chat, mediaId: m.mediaId, mimetype: m.mimetype || mimetype, buffer });
           }
         } catch {
           // No se registra el texto del error: puede contener URLs, claves o el contenido.
@@ -114,7 +106,7 @@ export function crearRouter({ webhook, panel, conversacion, medios, recuperar, d
     if (metodo === 'GET' && camino.startsWith('/reportes/')) {
       return servirReporte({ dirReportes, id: camino.slice('/reportes/'.length) });
     }
-    return panel({ ...peticion, ruta: camino });
+    return panel({ ...peticion, ruta: camino, consulta: ruta.split('?')[1] ?? '' });
   };
 }
 
@@ -227,7 +219,8 @@ export async function arrancar(env = process.env) {
   const cfg = leerConfig(env);
   const dir = cfg.datosDir;
   const puerto = cfg.puerto;
-  const vigilados = new Vigilados({ archivo: join(dir, 'vigilados.json') });
+  // Todos los chats se guardan completos y se pueden ver: ya no hay lista de chats vigilados.
+  const vigilados = new TodosLosChats();
   const almacen = new Almacen({ dir, vigilados });
   const dirReportes = join(dir, 'reportes');
   const medios = { apiKey: cfg.geminiKey, model: cfg.geminiModel };
@@ -246,8 +239,8 @@ export async function arrancar(env = process.env) {
     medios: crearMedios({ almacen, convertir }),
     recuperar: crearRecuperacion({ almacen, vigilados, evolution }),
     panel: crearPanel({
-      vigilados,
       almacen,
+      nombres,
       evolution: { listarChats },
       generar: ({ chat, nombre, desde, hasta }) =>
         generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution, nombres }),
@@ -258,12 +251,8 @@ export async function arrancar(env = process.env) {
 
   const servidor = crearServidorHttp({ manejar });
 
-  // El buzón de chats no vigilados se conserva siempre; con BUZON_DIAS > 0 se limpia al arrancar y cada día.
-  const limpiar = () => almacen.limpiarBuzon({ dias: cfg.buzonDias }).then((r) => r.borrados > 0 && console.log('buzón: borrados', r.borrados, 'mensajes viejos'), () => {});
-  if (cfg.buzonDias > 0) {
-    limpiar();
-    setInterval(limpiar, 24 * 3600 * 1000).unref();
-  }
+  // Lo que se guardó aparte cuando se elegían chats a vigilar pasa al almacén de todos los chats.
+  almacen.migrarBuzon().then((n) => n > 0 && console.log('buzón migrado:', n, 'mensajes'), () => console.error('no se pudo migrar el buzón'));
 
   servidor.listen(puerto, '127.0.0.1', () => {
     console.log(`escuchando en 127.0.0.1:${puerto}`);

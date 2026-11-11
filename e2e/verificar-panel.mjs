@@ -1,6 +1,6 @@
 // Prueba de navegador del panel: datos FICTICIOS + Chrome real por CDP. Sin dependencias.
 // Uso: npm run e2e [carpeta-de-capturas] [vacio]
-//   Requiere Google Chrome (otra ruta con CHROME_PATH). "vacio" prueba el panel sin chats vigilados.
+//   Requiere Google Chrome (otra ruta con CHROME_PATH). "vacio" prueba el panel sin ningún mensaje guardado.
 // Falla con código 1 si alguna comprobación no se cumple. Guarda capturas en claro y oscuro,
 // móvil y escritorio, en e2e/capturas (ignorada por git).
 import { createServer } from 'node:http';
@@ -12,37 +12,42 @@ import { fileURLToPath } from 'node:url';
 
 const SRC = new URL('../src/', import.meta.url).href;
 const { crearPanel } = await import(SRC + 'panel.js');
-const { Vigilados } = await import(SRC + 'vigilados.js');
 
 const argumentos = process.argv.slice(2);
 const vacio = argumentos.includes('vacio');
 const SALIDA = argumentos.find((a) => a !== 'vacio') ?? join(dirname(fileURLToPath(import.meta.url)), 'capturas');
 await mkdir(SALIDA, { recursive: true });
 
-// Datos ficticios: nombres largos, un contacto con ID privado y nombres que empiezan con símbolos.
+// Datos ficticios: nombres largos, un contacto con ID privado, nombres con símbolos y grupos.
 const nombres = ['Ana Beltrán', 'Beto Ríos (Imprenta Beto)', 'Carla Mendoza',
   'Despacho Hernández y Asociados, Contabilidad', 'Eduardo Salas', 'Fernanda Ortiz', 'Gustavo Pérez',
   'Helena Ruiz', 'Iván Castro', 'Julia Navarro', 'Karla Soto', 'Luis Mora', 'María José Fuentes',
   'Nadia Campos', 'Óscar Vidal', 'Paola Reyes', 'Quim Aguirre', 'Rosa Lima', 'Sergio Dávila', 'Tania Cruz'];
-const chats = nombres.map((n, i) => ({ jid: `52155500000${String(i).padStart(2, '0')}@s.whatsapp.net`, nombre: n }));
-chats.push({ jid: '900000000000001@lid', nombre: 'Contacto con ID privado' });
-for (let i = 0; i < 40; i++) chats.push({ jid: `52155511111${String(i).padStart(2, '0')}@s.whatsapp.net`, nombre: `Cliente ${i + 1} Ana` });
-chats.push({ jid: '5215522222222@s.whatsapp.net', nombre: '.' }, { jid: '5215533333333@s.whatsapp.net', nombre: '👌' });
-chats.push({ jid: '120363000000000001@g.us', nombre: 'Equipo Ventas', grupo: true },
+const contactos = nombres.map((n, i) => ({ jid: `52155500000${String(i).padStart(2, '0')}@s.whatsapp.net`, nombre: n }));
+contactos.push({ jid: '900000000000001@lid', nombre: 'Contacto con ID privado' });
+for (let i = 0; i < 40; i++) contactos.push({ jid: `52155511111${String(i).padStart(2, '0')}@s.whatsapp.net`, nombre: `Cliente ${i + 1} Ana` });
+contactos.push({ jid: '120363000000000001@g.us', nombre: 'Equipo Ventas', grupo: true },
   { jid: '120363000000000002@g.us', nombre: 'Familia', grupo: true },
   { jid: '120363000000000003@g.us', nombre: 'Proveedores y entregas del mes de noviembre', grupo: true });
 
-const dir = await mkdtemp(join(tmpdir(), 'panel-e2e-'));
-const vigilados = new Vigilados({ archivo: join(dir, 'v.json') });
-if (!vacio) for (const c of [chats[0], chats[3], chats[7]]) await vigilados.activar(c.jid);
+// Cada contacto con mensajes guardados; el primero tuvo mensajes hoy y el resto, días atrás.
+const ahora = Date.now();
+const chats = contactos.map((c, i) => ({
+  chat: c.jid, esGrupo: !!c.grupo, total: 5 + ((i * 37) % 900),
+  primero: new Date(ahora - (200 + i) * 86400000).toISOString(),
+  ultimo: new Date(ahora - (i === 0 ? 3600000 : (i + 1) * 3 * 3600000 * 4)).toISOString(),
+}));
+const almacen = { resumenChats: async () => (vacio ? [] : chats), formas: async (c) => [c] };
+
 const panel = crearPanel({
-  vigilados,
-  evolution: { listarChats: async () => chats },
+  almacen,
+  evolution: { listarChats: async () => contactos },
   generar: async () => { await new Promise((r) => setTimeout(r, 1800)); return { id: 'demo', url: '/reportes/demo' }; },
 });
 const srv = createServer(async (req, res) => {
   let b = ''; for await (const c of req) b += c;
-  const r = await panel({ metodo: req.method, ruta: new URL(req.url, 'http://x').pathname, cuerpo: b ? JSON.parse(b) : undefined });
+  const u = new URL(req.url, 'http://x');
+  const r = await panel({ metodo: req.method, ruta: u.pathname, consulta: u.search.slice(1), cuerpo: b ? JSON.parse(b) : undefined });
   if (r.html) { res.writeHead(r.estado, { 'content-type': 'text/html; charset=utf-8' }); res.end(r.html); return; }
   res.writeHead(r.estado, { 'content-type': 'application/json' }); res.end(JSON.stringify(r.cuerpo));
 }).listen(3120, '127.0.0.1');
@@ -65,11 +70,10 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = async (expression) => (await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
 
 const base = 'http://127.0.0.1:3120/';
-const nueva = () => base + '?r=' + Date.now(); // fuerza una carga completa (un cambio de #hash no recarga)
-async function ir(url, { ancho, alto, oscuro, movil }) {
+async function ir(ruta, { ancho, alto, oscuro, movil }) {
   await cmd('Emulation.setDeviceMetricsOverride', { width: ancho, height: alto, deviceScaleFactor: 2, mobile: movil });
   await cmd('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: oscuro ? 'dark' : 'light' }] });
-  await cmd('Page.navigate', { url });
+  await cmd('Page.navigate', { url: base + ruta });
   await dormir(900);
 }
 async function foto(nombre) {
@@ -79,87 +83,69 @@ async function foto(nombre) {
 const cel = { ancho: 390, alto: 844, movil: true };
 const mac = { ancho: 1280, alto: 800, movil: false };
 const sinDesborde = 'document.documentElement.scrollWidth <= document.documentElement.clientWidth';
+const visibles = "document.querySelectorAll('#lista li:not([hidden])').length";
 const informe = {};
+const chatPersona = 'chat?chat=' + encodeURIComponent(contactos[1].jid);
+const chatReciente = 'chat?chat=' + encodeURIComponent(contactos[0].jid);
 
-await ir(nueva(), { ...cel, oscuro: false });
-await foto('01-movil-resumen-claro');
+await ir('', { ...cel, oscuro: false });
+await foto('01-movil-lista-claro');
 informe.sinDesbordeHorizontal390 = await js(sinDesborde);
-const visibles = "document.querySelectorAll('#lista-resultados li:not([hidden])').length";
-informe.visiblesSinEscribir = await js(visibles);
 
-if (!vacio) {
-  await js("document.querySelector('#t-chats').click()"); await dormir(200);
-  await foto('02-movil-chats-claro');
+if (vacio) {
+  informe.explicaVacio = await js("document.body.textContent.includes('Todavía no hay mensajes guardados')");
+  informe.sinLista = await js("!document.querySelector('#lista')");
+  await ir('', { ...mac, oscuro: false });
+  await foto('08-escritorio-vacio');
+} else {
+  informe.visiblesSinEscribir = await js(visibles);
   await js("document.querySelector('#f-grupos').click()"); await dormir(250);
-  await foto('02b-movil-solo-grupos');
+  await foto('02-movil-solo-grupos');
   informe.visiblesGrupos = await js(visibles);
-  informe.soloGrupos = await js("[...document.querySelectorAll('#lista-resultados li:not([hidden])')].every((l) => l.dataset.tipo === 'grupo')");
+  informe.soloGrupos = await js("[...document.querySelectorAll('#lista li:not([hidden])')].every((l) => l.dataset.tipo === 'grupo')");
   await js("document.querySelector('#f-todos').click()"); await dormir(250);
   await js("document.querySelector('#mas').click()"); await dormir(250);
   informe.visiblesTrasMostrarMas = await js(visibles);
   await js("const i=document.querySelector('#buscar');i.value='ana';i.dispatchEvent(new Event('input'))"); await dormir(250);
   await foto('03-movil-busqueda');
-  informe.coincidenciasVisibles = await js("document.querySelectorAll('#lista-resultados li:not([hidden])').length");
-  const antes = await js("document.querySelectorAll('#lista-vigilados li').length");
-  await js("document.querySelector('#lista-resultados li:not([hidden]) button').click()"); await dormir(500);
-  informe.vigiladosAntes = antes;
-  informe.vigiladosDespues = await js("document.querySelectorAll('#lista-vigilados li').length");
-  informe.cuentaTexto = await js("document.querySelector('#cuenta-vigilados').textContent");
-  informe.opcionesSelector = await js("document.querySelectorAll('#chat option').length");
+  informe.coincidenciasAna = await js(visibles);
+  informe.todosLosEnlacesVanAUnChat = await js("[...document.querySelectorAll('#lista a')].every((a) => a.getAttribute('href').startsWith('/chat?chat='))");
 
-  await ir(nueva(), { ...cel, oscuro: true });
-  await foto('04-movil-resumen-oscuro');
+  await ir('', { ...cel, oscuro: true });
+  await foto('04-movil-lista-oscuro');
+  await ir(chatPersona, { ...cel, oscuro: false });
+  await foto('05-movil-chat');
+  informe.sugiereUltimoDia = await js("!!document.querySelector('[data-dia]')");
+  await js("document.querySelector('[data-dia]').click()"); await dormir(200);
+  informe.rangoTrasSugerencia = await js("!document.querySelector('#rango').hidden && document.querySelector('#desde').value === document.querySelector('[data-dia]').dataset.dia");
+  await foto('06-movil-chat-rango');
+  informe.fechasDentroDeLaFicha = await js("[...document.querySelectorAll('#rango input')].every((i) => i.getBoundingClientRect().right <= document.querySelector('.ficha').getBoundingClientRect().right)");
   await js("document.querySelector('#generar').click()"); await dormir(350);
-  await foto('05-movil-generando');
   informe.botonDuranteCarga = await js("document.querySelector('#generar').disabled");
   await dormir(2200);
-  await foto('06-movil-resultado');
+  await foto('07-movil-resultado');
   informe.enlaceReporte = await js("document.querySelector('#estado a')?.getAttribute('href')");
-  await js("document.querySelector('#p-rango').click()"); await dormir(200);
-  await foto('07-movil-otro-rango');
-  informe.rangoVisible = await js("!document.querySelector('#rango').hidden");
-}
-
-await ir(nueva(), { ...cel, oscuro: false, ancho: 320, alto: 640 });
-await foto('10-movil-320');
-informe.sinDesbordeHorizontal320 = await js(sinDesborde);
-informe.pestanaInicial = await js("document.querySelector('[role=tab][aria-selected=true]').textContent");
-await ir(nueva(), { ...mac, oscuro: false });
-await foto('08-escritorio-claro');
-await ir(nueva(), { ...mac, oscuro: true });
-await foto('09-escritorio-oscuro');
-informe.pestanasVisiblesEnEscritorio = await js("getComputedStyle(document.querySelector('.pestanas')).display");
-informe.panelesVisiblesEnEscritorio = await js("[...document.querySelectorAll('.panel')].map(p=>getComputedStyle(p).display).join(',')");
-
-if (vacio) {
-  // El botón "Elegir chats" del estado vacío debe llevar al buscador y dejarlo listo para escribir.
-  const enBuscador = "document.activeElement && document.activeElement.id";
-  const buscadorALaVista = "(() => { const r = document.querySelector('#buscar').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()";
-  await ir(nueva(), { ...cel, oscuro: false });
-  await js("document.querySelector('#t-resumen').click()"); await dormir(200);
-  await js("document.querySelector('[data-ir=\"chats\"]').click()"); await dormir(500);
-  await foto('11-movil-elegir-chats');
-  informe.elegirChatsMovilPestana = await js("document.querySelector('[role=tab][aria-selected=true]').textContent");
-  informe.elegirChatsMovilFoco = await js(enBuscador);
-  informe.elegirChatsMovilALaVista = await js(buscadorALaVista);
-  await ir(nueva(), { ...mac, oscuro: false });
-  await js("document.querySelector('[data-ir=\"chats\"]').click()"); await dormir(500);
-  await foto('12-escritorio-elegir-chats');
-  informe.elegirChatsEscritorioFoco = await js(enBuscador);
-  informe.elegirChatsEscritorioALaVista = await js(buscadorALaVista);
+  await ir(chatReciente, { ...cel, oscuro: false });
+  informe.sinSugerenciaSiHayHoy = await js("!document.querySelector('[data-dia]')");
+  await ir(chatPersona, { ...cel, oscuro: true });
+  await foto('09-movil-chat-oscuro');
+  await ir('', { ...mac, oscuro: false });
+  await foto('08-escritorio-lista-claro');
+  await ir(chatPersona, { ...mac, oscuro: true });
+  await foto('10-escritorio-chat-oscuro');
+  await ir('', { ...cel, oscuro: false, ancho: 320, alto: 640 });
+  informe.sinDesbordeHorizontal320 = await js(sinDesborde);
+  await ir(chatPersona, { ...cel, oscuro: false, ancho: 320, alto: 640 });
+  informe.chatSinDesborde320 = await js(sinDesborde);
 }
 
 chrome.kill(); srv.close();
 const esperado = vacio
-  ? { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, pestanaInicial: 'Chats', visiblesSinEscribir: 30,
-      pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block',
-      elegirChatsMovilPestana: 'Chats', elegirChatsMovilFoco: 'buscar', elegirChatsMovilALaVista: true,
-      elegirChatsEscritorioFoco: 'buscar', elegirChatsEscritorioALaVista: true }
-  : { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, coincidenciasVisibles: 30,
-      visiblesSinEscribir: 30, visiblesGrupos: 3, soloGrupos: true, visiblesTrasMostrarMas: 60,
-      vigiladosAntes: 3, vigiladosDespues: 4, cuentaTexto: '4', opcionesSelector: 4, botonDuranteCarga: true,
-      enlaceReporte: '/reportes/demo', rangoVisible: true, pestanaInicial: 'Resumen',
-      pestanasVisiblesEnEscritorio: 'none', panelesVisiblesEnEscritorio: 'block,block' };
+  ? { sinDesbordeHorizontal390: true, explicaVacio: true, sinLista: true }
+  : { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, chatSinDesborde320: true, visiblesSinEscribir: 40,
+      visiblesGrupos: 3, soloGrupos: true, visiblesTrasMostrarMas: 64, coincidenciasAna: 40, todosLosEnlacesVanAUnChat: true,
+      sugiereUltimoDia: true, fechasDentroDeLaFicha: true, rangoTrasSugerencia: true, botonDuranteCarga: true, enlaceReporte: '/reportes/demo',
+      sinSugerenciaSiHayHoy: true };
 const fallos = Object.entries(esperado).filter(([k, v]) => informe[k] !== v);
 console.log(JSON.stringify(informe, null, 1));
 if (fallos.length) {

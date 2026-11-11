@@ -28,7 +28,7 @@ test('panel: desde = hasta = un dia incluye un mensaje de las 23:00 locales', as
     await almacen.guardar(msg('despues', new Date(2026, 10, 10, 0, 1)));
     let leidos;
     const panel = crearPanel({
-      vigilados,
+      almacen,
       evolution: { listarChats: async () => [] },
       generar: async ({ chat, desde, hasta }) => {
         leidos = (await almacen.leer({ chat, desde, hasta })).map((m) => m.id);

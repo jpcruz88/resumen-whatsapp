@@ -62,3 +62,14 @@ export class Vigilados {
     return this.#leer().includes(jid);
   }
 }
+
+// Sin lista: todos los chats se guardan completos y se pueden ver. Mismo contrato que Vigilados.
+export class TodosLosChats {
+  todos = true;
+  async lista() { return []; }
+  async esVigilado() { return true; }
+  async activar() {}
+  async desactivar() {}
+  async desdeDe() { return null; }
+  async ajustarDesde() {}
+}

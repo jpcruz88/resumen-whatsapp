@@ -4,7 +4,7 @@
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { escaparHtml, ID_REPORTE } from './reporte.js';
-import { inicioDelDia, finDelDia, etiquetaPeriodo, etiquetaDia } from './fechas.js';
+import { inicioDelDia, finDelDia, etiquetaPeriodo, etiquetaRango, etiquetaDia } from './fechas.js';
 import { BASE_CSS, FLECHA, ICONO_BUSCAR, ICONO_CHAT, ICONO_IMAGEN, ICONO_AUDIO } from './estilos.js';
 import { conNombres } from './nombres.js';
 
@@ -13,6 +13,10 @@ const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const ID_MEDIO = /^[A-Za-z0-9_-]{1,100}$/;
 
 const CSS = String.raw`
+.ir-dia { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.ir-dia label { font-weight: 600; font-size: .9rem; flex-basis: 100%; }
+.ir-dia input[type="date"] { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-s); }
+.ir-dia .boton { min-height: 44px; padding: 0 18px; }
 .cabecera{margin:4px 0 12px}
 h1{margin:4px 0 6px;font-size:1.6rem;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere}
 .meta{margin:0;color:var(--suave);font-size:.95rem}
@@ -175,8 +179,8 @@ function sinMedio(m, icono, que) {
     const [titulo, boton] = que === 'Imagen' ? ['Imagen no guardada', 'Cargar imagen'] : ['Audio no guardado', 'Cargar audio'];
     return `<div class="sin-medio recuperable">${icono}<p><strong>${titulo}</strong><span>Se puede pedir a WhatsApp.</span></p><button type="button" class="cargar boton secundario">${boton}</button></div>`;
   }
-  const titulo = m.sinMedio ? `${que} no disponible` : 'Archivo no disponible';
-  const motivo = m.sinMedio ? 'Es de antes de vigilar este chat.' : 'No se guardó el archivo de este mensaje.';
+  const titulo = que === 'Imagen' ? 'Imagen no guardada' : 'Audio no guardado';
+  const motivo = m.sinMedio ? 'No se puede pedir de nuevo a WhatsApp.' : 'No se guardó el archivo de este mensaje.';
   return `<div class="sin-medio">${icono}<p><strong>${titulo}</strong><span>${motivo}</span></p></div>`;
 }
 
@@ -223,7 +227,7 @@ ${pagina < totalPaginas ? enlace(pagina + 1, 'Siguiente') : '<span></span>'}
 </nav>`;
 }
 
-export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total, pagina, totalPaginas, version }) {
+export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total, pagina, totalPaginas, version, guardados }) {
   const titulo = escaparHtml(nombre || chat || 'Conversación');
   const cuenta = `${total} ${total === 1 ? 'mensaje' : 'mensajes'}`;
   let diaActual = null;
@@ -241,7 +245,7 @@ export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensaj
     ? `<p class="acciones"><a class="boton-enlace" href="/reportes/${escaparHtml(reporte)}">${ICONO_CHAT}Ver resumen</a></p>`
     : '';
   const cuerpo = mensajes.length === 0
-    ? '<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>Solo se guardan los mensajes que llegan después de empezar a vigilar el chat, más el historial que WhatsApp manda al vincular.</p></div>'
+    ? `<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>${guardados ? `Este chat tiene mensajes guardados ${escaparHtml(etiquetaRango(guardados.primero, guardados.ultimo))}. Prueba con otro día.` : 'Todavía no hay ningún mensaje guardado de este chat.'}</p></div>`
     : `${nav}<ol class="mensajes" id="lista" data-chat="${escaparHtml(chat)}">\n${filas.join('\n')}\n</ol>\n${nav}`;
   const herramientas = mensajes.length === 0 ? '' : `<div class="herramientas">
 <div class="busca">${ICONO_BUSCAR}<input type="search" id="buscar" placeholder="Buscar en esta página" aria-label="Buscar en los mensajes" autocomplete="off"></div>
@@ -252,6 +256,12 @@ export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensaj
 </fieldset>
 <p id="resultado" aria-live="polite"></p>
 </div>`;
+  const irDia = guardados ? `<form id="ir-dia" method="get" action="/conversacion" class="ir-dia">
+<input type="hidden" name="chat" value="${escaparHtml(chat)}">${reporte ? `<input type="hidden" name="reporte" value="${escaparHtml(reporte)}">` : ''}
+<label for="dia">Ir a otro día</label>
+<input type="date" name="dia" id="dia" required min="${escaparHtml(diaClave(guardados.primero))}" max="${escaparHtml(diaClave(guardados.ultimo))}">
+<button type="submit" class="boton secundario">Ir</button>
+</form>` : '';
   const pie = version ? `<footer class="pie">Resumen de WhatsApp v${escaparHtml(version)} · Desarrollado por JP</footer>` : '';
   return `<!doctype html>
 <html lang="es">
@@ -271,6 +281,7 @@ export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensaj
 <p class="meta">${cuenta}</p>
 ${acciones}
 </header>
+${irDia}
 ${herramientas}
 <main>
 ${cuerpo}
@@ -313,8 +324,10 @@ export function crearConversacion({ almacen, vigilados, nombrePara, nombres, ver
     if (!chat) return paginaError(400, 'Falta el chat', 'Abre la conversación desde el panel.');
     // Primero el rechazo: antes de leer un solo mensaje.
     if (!(await vigilados.esVigilado(chat))) return paginaError(403, 'Chat no vigilado', 'Solo se pueden ver los chats que vigilas.');
-    const desde = limite(q.get('desde') ?? hoy(), false);
-    const hasta = limite(q.get('hasta') ?? hoy(), true);
+    // "Ir a otro día" manda un solo día; si no, el periodo del panel o de un reporte.
+    const dia = q.get('dia');
+    const desde = limite(dia ?? q.get('desde') ?? hoy(), false);
+    const hasta = limite(dia ?? q.get('hasta') ?? hoy(), true);
     if (!desde || !hasta || desde > hasta) return paginaError(400, 'Fechas no válidas', 'Revisa el periodo e inténtalo de nuevo.');
 
     // Reporte de origen: solo si el id es válido y el archivo existe, para no mostrar un enlace roto.
@@ -323,7 +336,11 @@ export function crearConversacion({ almacen, vigilados, nombrePara, nombres, ver
       && (await access(join(dirReportes, `${idReporte}.html`)).then(() => true, () => false))
       ? idReporte : null;
 
-    const todos = await almacen.leer({ chat, desde, hasta });
+    const delChat = await almacen.leer({ chat });
+    const guardados = delChat.length > 0 ? { primero: delChat[0].fecha, ultimo: delChat[delChat.length - 1].fecha } : null;
+    const d0 = Date.parse(desde);
+    const h0 = Date.parse(hasta);
+    const todos = delChat.filter((m) => { const t = Date.parse(m.fecha); return t >= d0 && t <= h0; });
     const totalPaginas = Math.max(1, Math.ceil(todos.length / POR_PAGINA));
     let pagina = Number.parseInt(q.get('pagina') ?? '1', 10);
     if (!Number.isInteger(pagina) || pagina < 1) pagina = 1;
@@ -344,7 +361,7 @@ export function crearConversacion({ almacen, vigilados, nombrePara, nombres, ver
     const nombre = await Promise.resolve(nombrePara?.(chat)).catch(() => undefined);
     return {
       estado: 200,
-      html: renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total: todos.length, pagina, totalPaginas, version }),
+      html: renderConversacion({ nombre, chat, desde, hasta, reporte, mensajes, total: todos.length, pagina, totalPaginas, version, guardados }),
     };
   };
 }

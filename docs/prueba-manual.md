@@ -29,7 +29,7 @@ Anota el modelo que funcione en el README.
 2. Configura el webhook de la instancia como indica el README (evento `MESSAGES_UPSERT`,
    `base64: true`, cabecera `apikey` igual a `SECRETO_WEBHOOK`).
 3. Arranca el servicio: `npm start`.
-4. Abre el panel local, marca un chat como vigilado.
+4. Abre el panel local y espera a que el chat aparezca en la lista.
 5. Desde otro teléfono manda a ese chat un texto, un audio y una foto.
 6. Revisa `DATOS_DIR`: debe haber una línea nueva en el archivo `.jsonl` del chat y los
    archivos en `DATOS_DIR/media/`.
@@ -56,6 +56,6 @@ la Mac y en el celular.
 ## Si algo falla
 
 - Audio con "no se pudo procesar": revisa el paso 2 (modelo) y el paso 3.7 (ruta del base64).
-- Chat vigilado que no guarda nada: compara el JID del panel con el `remoteJid` del webhook.
+- Chat que no aparece en la lista: revisa que el webhook llegue (log del servicio) y que el `remoteJid` no sea un estado o canal.
 - Webhook con 401: la cabecera `apikey` no coincide con `SECRETO_WEBHOOK`.
 - Panel con 403: agrega tu hostname a `PANEL_HOSTS`.

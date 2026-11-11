@@ -1,121 +1,153 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crearPanel } from '../src/panel.js';
 import { servirReporte } from '../src/servidor.js';
-import { Vigilados } from '../src/vigilados.js';
 
 const JID = '5215512345678@s.whatsapp.net';
+const GRUPO = '120363000000000001@g.us';
+const LID = '100000000000001@lid';
+const AHORA = new Date(2026, 10, 11, 15, 0, 0);
+const iso = (y, m, d, h = 12, mi = 0) => new Date(y, m, d, h, mi).toISOString();
 
-async function montar(extra = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'panel-'));
-  const vigilados = new Vigilados({ archivo: join(dir, 'v.json') });
+const CHATS = [
+  { chat: GRUPO, total: 1161, primero: iso(2025, 10, 13), ultimo: iso(2026, 10, 11, 14, 20), esGrupo: true },
+  { chat: JID, total: 312, primero: iso(2026, 7, 12), ultimo: iso(2026, 10, 10, 19, 40), esGrupo: false },
+  { chat: LID, total: 5, primero: iso(2026, 9, 1), ultimo: iso(2026, 9, 16), esGrupo: false },
+];
+
+function montar(extra = {}) {
   const llamadas = [];
   const panel = crearPanel({
-    vigilados,
-    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana <b>& Co' }] },
+    almacen: { resumenChats: async () => CHATS, formas: async (c) => [c] },
+    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana <b>& Co' }, { jid: GRUPO, nombre: 'Equipo Ventas', grupo: true }] },
     generar: async (a) => { llamadas.push(a); return { id: 'abc-1', url: '/reportes/abc-1' }; },
+    ahora: () => AHORA,
     ...extra,
   });
-  return { dir, vigilados, panel, llamadas };
+  return { panel, llamadas };
 }
+const get = (panel, ruta, consulta = '') => panel({ metodo: 'GET', ruta, consulta });
 
-test('GET / lista chats con nombre y JID escapados', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.equal(r.estado, 200);
-    assert.ok(r.html.includes('Ana &lt;b&gt;&amp; Co'));
-    assert.ok(!r.html.includes('<b>&'));
-    assert.ok(r.html.includes(JID));
-    assert.match(r.html, /Generar resumen/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
+test('GET / lista todos los chats guardados, el más reciente primero, con nombre escapado y enlace al chat', async () => {
+  const { panel } = montar();
+  const r = await get(panel, '/');
+  assert.equal(r.estado, 200);
+  const filas = [...r.html.matchAll(/<li[^>]*data-buscar="([^"]*)"[^>]*>[\s\S]*?<a class="fila" href="([^"]*)"/g)];
+  assert.equal(filas.length, 3);
+  assert.ok(filas[0][2].endsWith(encodeURIComponent(GRUPO)));
+  assert.ok(r.html.includes('Ana &lt;b&gt;&amp; Co'));
+  assert.ok(!r.html.includes('<b>&'));
+  assert.ok(filas[1][1].includes('Ana &lt;b&gt;&amp; Co') && filas[1][1].includes('5215512345678'), 'se busca por nombre y por número');
 });
 
-test('GET / muestra los vigilados en su lista y el selector ofrece solo esos chats', async () => {
-  const otro = '5215599999999@s.whatsapp.net';
-  const { dir, panel, vigilados } = await montar({
-    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana' }, { jid: otro, nombre: 'Beto' }] },
+test('cada fila dice cuándo fue el último mensaje y cuántos hay', async () => {
+  const { panel } = montar();
+  const { html } = await get(panel, '/');
+  assert.match(html, /hoy 14:20 · 1161 mensajes/);
+  assert.match(html, /ayer 19:40 · 312 mensajes/);
+  assert.match(html, /16 oct · 5 mensajes/);
+});
+
+test('un contacto o grupo sin nombre se muestra claro, sin el número completo', async () => {
+  const { panel } = montar({ almacen: { resumenChats: async () => [
+    { chat: '555123456789@lid', total: 2, primero: iso(2026, 10, 1), ultimo: iso(2026, 10, 2), esGrupo: false },
+    { chat: '120363000000000009@g.us', total: 3, primero: iso(2026, 10, 1), ultimo: iso(2026, 10, 1), esGrupo: true },
+  ], formas: async (c) => [c] } });
+  const { html } = await get(panel, '/');
+  assert.match(html, /Contacto sin nombre \(…6789\)/);
+  assert.match(html, /Grupo sin nombre/);
+  assert.ok(!html.replace(/href="[^"]*"/g, '').includes('555123456789'), 'el número completo no se muestra');
+});
+
+test('si Evolution no responde la lista abre igual, con aviso', async () => {
+  const { panel } = montar({ evolution: { listarChats: async () => { throw new Error('fetch failed'); } } });
+  const r = await get(panel, '/');
+  assert.equal(r.estado, 200);
+  assert.match(r.html, /<p id="aviso" class="msg error" role="alert">[^<]*WhatsApp[^<]*desconectado/);
+  assert.match(r.html, /Contacto sin nombre/);
+});
+
+test('sin ningún mensaje guardado explica qué pasa', async () => {
+  const { panel } = montar({ almacen: { resumenChats: async () => [], formas: async (c) => [c] } });
+  const { html } = await get(panel, '/');
+  assert.match(html, /Todavía no hay mensajes guardados/);
+  assert.ok(!html.includes('class="fila"'));
+});
+
+test('la lista trae buscador, filtro Todos/Personas/Grupos y es una página móvil accesible', async () => {
+  const { panel } = montar();
+  const { html } = await get(panel, '/');
+  assert.match(html, /<input[^>]*type="search"[^>]*id="buscar"/);
+  for (const v of ['todos', 'personas', 'grupos']) assert.match(html, new RegExp('name="filtro" value="' + v + '"'));
+  assert.match(html, /<html lang="es">/);
+  assert.match(html, /name="viewport"/);
+  assert.match(html, /name="color-scheme" content="light dark"/);
+  assert.match(html, /data-tipo="grupo"/);
+  assert.match(html, /data-tipo="persona"/);
+  assert.ok(html.includes(String.raw`[\u0300-\u036f]`), 'el buscador ignora acentos');
+  assert.match(html, /Resumen de WhatsApp v\d+\.\d+\.\d+ · Desarrollado por JP/);
+});
+
+test('ya no existe la idea de vigilar: ni botones ni ruta', async () => {
+  const { panel } = montar();
+  const { html } = await get(panel, '/');
+  assert.ok(!/vigil/i.test(html), 'la página no menciona vigilar');
+  const r = await panel({ metodo: 'POST', ruta: '/vigilar', cuerpo: { chat: JID, activo: true } });
+  assert.equal(r.estado, 404);
+});
+
+test('GET /chat muestra el chat, cuántos mensajes tiene y el formulario del resumen', async () => {
+  const { panel } = montar();
+  const r = await get(panel, '/chat', 'chat=' + encodeURIComponent(JID));
+  assert.equal(r.estado, 200);
+  assert.match(r.html, /<h1[^>]*>Ana &lt;b&gt;&amp; Co<\/h1>/);
+  assert.match(r.html, /312 mensajes/);
+  assert.match(r.html, /12 de agosto al 10 de noviembre de 2026/);
+  assert.match(r.html, /<form id="form-resumen"[^>]*data-chat="5215512345678@s\.whatsapp\.net"/);
+  for (const v of ['hoy', 'ayer', '7dias', 'rango']) assert.match(r.html, new RegExp('name="periodo" value="' + v + '"'));
+  assert.match(r.html, /id="generar"/);
+  assert.match(r.html, /id="ver-conversacion"/);
+  assert.match(r.html, /href="\/"/);
+});
+
+test('GET /chat sugiere el último día con mensajes cuando hoy no hay', async () => {
+  const { panel } = montar();
+  const sin = await get(panel, '/chat', 'chat=' + encodeURIComponent(JID));
+  assert.match(sin.html, /data-dia="2026-11-10"/);
+  const con = await get(panel, '/chat', 'chat=' + encodeURIComponent(GRUPO));
+  assert.ok(!con.html.includes('data-dia='), 'si hoy hay mensajes no hace falta sugerir otro día');
+});
+
+test('GET /chat de un chat sin mensajes o sin parámetro responde 404 con un camino de vuelta', async () => {
+  const { panel } = montar();
+  for (const consulta of ['chat=nadie%40g.us', '']) {
+    const r = await get(panel, '/chat', consulta);
+    assert.equal(r.estado, 404);
+    assert.match(r.html, /href="\/"/);
+  }
+});
+
+test('POST /resumen genera el reporte de cualquier chat con mensajes, con su nombre y el periodo', async () => {
+  const { panel, llamadas } = montar();
+  const r = await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { chat: JID, desde: '2026-11-01', hasta: '2026-11-02' } });
+  assert.equal(r.estado, 200);
+  assert.deepEqual(r.cuerpo, { url: '/reportes/abc-1' });
+  assert.deepEqual(llamadas[0], {
+    chat: JID,
+    nombre: 'Ana <b>& Co',
+    desde: new Date(2026, 10, 1, 0, 0, 0, 0).toISOString(),
+    hasta: new Date(2026, 10, 2, 23, 59, 59, 999).toISOString(),
   });
-  try {
-    await vigilados.activar(JID);
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    const lista = html.match(/<ul[^>]*id="lista-vigilados"[^>]*>([\s\S]*?)<\/ul>/)[1];
-    assert.ok(lista.includes(JID) && !lista.includes(otro));
-    const resultados = html.match(/<ul[^>]*id="lista-resultados"[^>]*>([\s\S]*?)<\/ul>/)[1];
-    assert.ok(resultados.includes(otro) && !resultados.includes(JID));
-    const selector = html.match(/<select[^>]*id="chat"[^>]*>([\s\S]*?)<\/select>/)[1];
-    assert.ok(selector.includes(JID) && !selector.includes(otro));
-    assert.match(html, /<span id="cuenta-vigilados">1<\/span>/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('GET / sin chats vigilados explica qué hacer y no ofrece un selector vacío', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(html, /Aún no vigilas ningún chat/);
-    assert.ok(!html.includes('<select'));
-    assert.match(html, /<span id="cuenta-vigilados">0<\/span>/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / es una página móvil y accesible: idioma, viewport, esquema de color y controles con etiqueta', async () => {
-  const { dir, panel, vigilados } = await montar();
-  try {
-    await vigilados.activar(JID);
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(html, /<html lang="es"/);
-    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1/);
-    assert.match(html, /<meta name="color-scheme" content="light dark">/);
-    assert.match(html, /prefers-color-scheme: dark/);
-    assert.match(html, /prefers-reduced-motion: reduce/);
-    assert.match(html, /<label for="chat">/);
-    assert.match(html, /<label for="buscar">/);
-    for (const v of ['hoy', 'ayer', '7dias', 'rango']) {
-      assert.match(html, new RegExp(`<input[^>]*type="radio"[^>]*name="periodo"[^>]*value="${v}"`));
-    }
-    assert.match(html, /<div id="rango"[^>]*hidden/);
-    assert.match(html, /<[^>]*id="estado"[^>]*aria-live="polite"/);
-    assert.ok(!/ on[a-z]+=/.test(html), 'sin manejadores de eventos en línea');
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-test('POST /vigilar activa y desactiva', async () => {
-  const { dir, panel, vigilados } = await montar();
-  try {
-    const r = await panel({ metodo: 'POST', ruta: '/vigilar', cuerpo: { chat: JID, activo: true } });
-    assert.equal(r.estado, 200);
-    assert.equal(await vigilados.esVigilado(JID), true);
-    await panel({ metodo: 'POST', ruta: '/vigilar', cuerpo: { chat: JID, activo: false } });
-    assert.equal(await vigilados.esVigilado(JID), false);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('POST /resumen de chat no vigilado responde 403 y no genera', async () => {
-  const { dir, panel, llamadas } = await montar();
-  try {
-    const r = await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { chat: JID, desde: '2026-11-01', hasta: '2026-11-02' } });
-    assert.equal(r.estado, 403);
-    assert.equal(llamadas.length, 0);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('POST /resumen de chat vigilado devuelve la url', async () => {
-  const { dir, panel, vigilados, llamadas } = await montar();
-  try {
-    await vigilados.activar(JID);
-    const r = await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { chat: JID, desde: '2026-11-01', hasta: '2026-11-02' } });
-    assert.equal(r.estado, 200);
-    assert.deepEqual(r.cuerpo, { url: '/reportes/abc-1' });
-    assert.deepEqual(llamadas[0], {
-      chat: JID,
-      nombre: 'Ana <b>& Co',
-      desde: new Date(2026, 10, 1, 0, 0, 0, 0).toISOString(),
-      hasta: new Date(2026, 10, 2, 23, 59, 59, 999).toISOString(),
-    });
-  } finally { await rm(dir, { recursive: true, force: true }); }
+test('POST /resumen valida chat y fechas', async () => {
+  const { panel, llamadas } = montar();
+  assert.equal((await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { desde: '2026-11-01', hasta: '2026-11-02' } })).estado, 400);
+  assert.equal((await panel({ metodo: 'POST', ruta: '/resumen', cuerpo: { chat: JID, desde: 'ayer', hasta: '2026-11-02' } })).estado, 400);
+  assert.equal(llamadas.length, 0);
 });
 
 test('GET /reportes/:id sirve el HTML guardado; 404 si no existe o es invalido', async () => {
@@ -142,13 +174,13 @@ function router() {
 }
 const JSON_CT = 'application/json';
 
-test('POST /vigilar con content-type text/plain responde 415', async () => {
-  const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host: '127.0.0.1:3100', 'content-type': 'text/plain' }, cuerpo: {} });
+test('POST /resumen con content-type text/plain responde 415', async () => {
+  const r = await router()({ metodo: 'POST', ruta: '/resumen', cabeceras: { host: '127.0.0.1:3100', 'content-type': 'text/plain' }, cuerpo: {} });
   assert.equal(r.estado, 415);
 });
 
-test('POST /vigilar con Host ajeno responde 403', async () => {
-  const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host: 'evil.example', 'content-type': JSON_CT }, cuerpo: {} });
+test('POST /resumen con Host ajeno responde 403', async () => {
+  const r = await router()({ metodo: 'POST', ruta: '/resumen', cabeceras: { host: 'evil.example', 'content-type': JSON_CT }, cuerpo: {} });
   assert.equal(r.estado, 403);
 });
 
@@ -157,9 +189,9 @@ test('GET / con Host ajeno responde 403', async () => {
   assert.equal(r.estado, 403);
 });
 
-test('POST /vigilar con JSON y Host permitido procede', async () => {
+test('POST /resumen con JSON y Host permitido procede', async () => {
   for (const host of ['127.0.0.1:3100', 'panel.ejemplo.com']) {
-    const r = await router()({ metodo: 'POST', ruta: '/vigilar', cabeceras: { host, 'content-type': 'application/json; charset=utf-8' }, cuerpo: {} });
+    const r = await router()({ metodo: 'POST', ruta: '/resumen', cabeceras: { host, 'content-type': 'application/json; charset=utf-8' }, cuerpo: {} });
     assert.equal(r.estado, 200);
   }
 });
@@ -195,116 +227,5 @@ test('servirReporte sigue rechazando traversal, barras, % y mayusculas', async (
     for (const id of ['..', '../abc-1', 'a/b', 'a%2Fb', 'ABC-1', 'abc 1']) {
       assert.equal((await servirReporte({ dirReportes: dir, id })).estado, 404, id);
     }
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-// ---------- buscador de la lista ----------
-test('GET / trae un buscador y cada fila lleva en data-buscar el nombre y el JID escapados', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(r.html, /<input[^>]*type="search"[^>]*id="buscar"/);
-    const fila = r.html.match(/<li[^>]*data-buscar="([^"]*)"[^>]*>/);
-    assert.ok(fila, 'la fila debe llevar data-buscar');
-    assert.ok(fila[1].includes('Ana &lt;b&gt;&amp; Co'));
-    assert.ok(fila[1].includes(JID));
-    assert.ok(!r.html.includes('<b>&'));
-    assert.match(r.html, /normalize\('NFD'\)/);
-    // El escape debe llegar al navegador como texto \u0300, no como el carácter ya resuelto.
-    assert.ok(r.html.includes(String.raw`[\u0300-\u036f]`));
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-test('GET / escapa comillas del nombre en data-buscar', async () => {
-  const { dir, panel } = await montar({
-    evolution: { listarChats: async () => [{ jid: JID, nombre: 'x" onmouseover="alert(1)' }] },
-  });
-  try {
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.ok(!r.html.includes('x" onmouseover'));
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / muestra en el pie la versión de package.json y "Desarrollado por JP"', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.equal(r.estado, 200);
-    const pie = r.html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/);
-    assert.ok(pie, 'la página debe tener un <footer>');
-    assert.ok(pie[1].includes(`v${pkg.version}`), `el pie debe incluir v${pkg.version}`);
-    assert.ok(pie[1].includes('Desarrollado por JP'));
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-const GRUPO_JID = '120363000000000001@g.us';
-
-test('GET / marca los grupos: data-tipo, texto "Grupo" y las personas como persona', async () => {
-  const { dir, panel } = await montar({
-    evolution: { listarChats: async () => [{ jid: JID, nombre: 'Ana' }, { jid: GRUPO_JID, nombre: 'Equipo <Ventas>', grupo: true }] },
-  });
-  try {
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    const grupo = html.match(new RegExp(`<li[^>]*data-chat="${GRUPO_JID}"[^>]*>[\\s\\S]*?</li>`))[0];
-    const persona = html.match(new RegExp(`<li[^>]*data-chat="${JID}"[^>]*>[\\s\\S]*?</li>`))[0];
-    assert.match(grupo, /data-tipo="grupo"/);
-    assert.match(grupo, /<span class="numero">Grupo<\/span>/);
-    assert.ok(grupo.includes('Equipo &lt;Ventas&gt;') && !grupo.includes('<Ventas>'));
-    assert.match(persona, /data-tipo="persona"/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / ofrece el filtro Todos, Personas y Grupos y el botón Mostrar más', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    for (const v of ['todos', 'personas', 'grupos']) {
-      assert.match(html, new RegExp(`<input[^>]*type="radio"[^>]*name="filtro"[^>]*value="${v}"`));
-    }
-    assert.match(html, /<input[^>]*name="filtro"[^>]*value="todos"[^>]*checked/);
-    assert.match(html, /<button[^>]*id="mas"/);
-    assert.match(html, /Buscar entre \d+ contactos y grupos/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / avisa en la página si el JavaScript falla', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(html, /addEventListener\('error'/);
-    assert.match(html, /unhandledrejection/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / con chats vigilados ofrece "Ver conversación" junto a "Generar resumen"', async () => {
-  const { dir, panel, vigilados } = await montar();
-  try {
-    await vigilados.activar(JID);
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(html, /<button type="button" id="ver-conversacion" class="boton secundario">Ver conversación<\/button>/);
-    assert.match(html, /window\.open\('\/conversacion\?'/, 'el script abre la conversación del periodo elegido');
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / abre igual si Evolution no responde: muestra los vigilados y avisa que falta la lista de contactos', async () => {
-  const { dir, panel, vigilados } = await montar({
-    evolution: { listarChats: async () => { throw new Error('fetch failed'); } },
-  });
-  try {
-    await vigilados.activar(JID);
-    const r = await panel({ metodo: 'GET', ruta: '/' });
-    assert.equal(r.estado, 200);
-    const lista = r.html.match(/<ul[^>]*id="lista-vigilados"[^>]*>([\s\S]*?)<\/ul>/)[1];
-    assert.ok(lista.includes(JID), 'el vigilado sigue en la lista');
-    assert.match(r.html, /<select[^>]*id="chat"/);
-    assert.match(r.html, /<p id="aviso" class="msg error" role="alert">[^<]*WhatsApp[^<]*desconectado[^<]*<\/p>/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-test('GET / con Evolution sano no muestra el aviso de desconexión', async () => {
-  const { dir, panel } = await montar();
-  try {
-    const { html } = await panel({ metodo: 'GET', ruta: '/' });
-    assert.match(html, /<p id="aviso" class="msg error" role="alert" hidden><\/p>/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

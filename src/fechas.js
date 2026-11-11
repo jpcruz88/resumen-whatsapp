@@ -53,3 +53,33 @@ export function etiquetaDia(iso) {
   if (!d) return String(iso ?? '');
   return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
+
+const MES3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// "2026-11-10" en hora local (el día de un instante, como lo ve quien usa el panel).
+export function diaLocal(iso) {
+  const d = valida(iso);
+  if (!d) return '';
+  const dos = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
+// Cuándo fue algo, corto: "hoy 14:20", "ayer 19:40", "16 oct" o "16 oct 2025".
+export function etiquetaReciente(iso, ahora = new Date()) {
+  const d = valida(iso);
+  if (!d) return '';
+  const dos = (n) => String(n).padStart(2, '0');
+  const hora = `${dos(d.getHours())}:${dos(d.getMinutes())}`;
+  if (mismoDia(d, ahora)) return `hoy ${hora}`;
+  const ayer = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1);
+  if (mismoDia(d, ayer)) return `ayer ${hora}`;
+  return `${d.getDate()} ${MES3[d.getMonth()]}${d.getFullYear() === ahora.getFullYear() ? '' : ` ${d.getFullYear()}`}`;
+}
+
+// "del 29 de julio al 9 de noviembre de 2026", o "el martes 3 de noviembre de 2026" si es un solo día.
+export function etiquetaRango(desde, hasta) {
+  const a = valida(desde);
+  const b = valida(hasta);
+  if (!a || !b) return '';
+  return `${mismoDia(a, b) ? 'el' : 'del'} ${etiquetaPeriodo(desde, hasta)}`;
+}

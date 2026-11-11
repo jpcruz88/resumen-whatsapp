@@ -33,7 +33,7 @@ que te pidieron. **No responde ni envía nada a WhatsApp.**
      -d '{"webhook":{"enabled":true,"url":"http://host.docker.internal:3100/webhook/evolution","events":["MESSAGES_UPSERT","MESSAGES_SET","CONNECTION_UPDATE"],"base64":true,"headers":{"apikey":"<SECRETO_WEBHOOK>"}}}'
    ```
 5. Arranca el servidor: `npm start` (escucha solo en `127.0.0.1:PUERTO`). Desde el
-   panel (`http://127.0.0.1:3100/`) eliges los chats vigilados y generas reportes.
+   panel (`http://127.0.0.1:3100/`) eliges un chat de la lista y generas su resumen o abres su conversación.
 6. Reporte por terminal:
    `node src/cli.js --chat 5215511111111@s.whatsapp.net --desde 2026-11-02 --hasta 2026-11-09`
    Imprime la URL local del reporte (`http://127.0.0.1:3100/reportes/<id>`).
@@ -44,16 +44,16 @@ Para abrir el panel desde el celular u otro lugar, con acceso protegido por Clou
 
 En el panel, **Ver conversación** abre los mensajes del chat y del periodo elegido como en WhatsApp: con hora, quién escribió, imágenes que se abren y audios con reproductor (y su transcripción si ya se generó un resumen). También hay un botón en cada reporte. No usa Gemini. Los audios de WhatsApp son `.ogg`; si hay `ffmpeg` instalado se convierten a `.m4a` para que suenen en el iPhone y en Safari.
 
-Las imágenes y los audios que llegaron **después** de vigilar el chat ya están guardados. Los del historial importado salen con un botón **Cargar**, que se los pide a WhatsApp de uno en uno (ver `docs/importar-historial.md`).
+Las imágenes y los audios que llegan se descargan al llegar, de todos los chats. Los del historial importado salen con un botón **Cargar**, que se los pide a WhatsApp de uno en uno (ver `docs/importar-historial.md`).
 
 ## Historial anterior
 
-Al vigilar un chat se recupera lo que ya había llegado de él (buzón, ver `docs/importar-historial.md`).
+Al vincular WhatsApp, el historial que manda de todos tus chats se guarda (ver `docs/importar-historial.md`).
 
 ## Privacidad
 
-- Los chats que activas en el panel (`vigilados.json`) se guardan completos: texto, audios e imágenes, sin límite de tiempo.
-- Los demás chats dejan su texto y, desde que se vinculó, sus audios e imágenes en `DATOS_DIR/buzon` y `DATOS_DIR/media` (siempre; con `BUZON_DIAS` > 0 el texto se borra pasados esos días). No se ven, no se resumen y no se envían a Gemini hasta que vigilas el chat. Los archivos ocupan disco: revisa `DATOS_DIR/media`.
+- Se guardan **todos** los chats: texto y datos de descarga en `DATOS_DIR` (un `.jsonl` por chat) y audios e imágenes en `DATOS_DIR/media`, sin límite de tiempo. Los archivos ocupan disco: revisa `DATOS_DIR/media`.
+- A Gemini solo llega lo del chat y el periodo cuyo resumen pides.
 - Los mensajes, medios y reportes quedan en `DATOS_DIR` (en `.gitignore`). Nunca se suben al repo.
 - Los textos se envían a Gemini para resumir. Revisa tu política de uso de la API.
 

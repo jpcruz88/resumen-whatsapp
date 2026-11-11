@@ -87,7 +87,7 @@ test('un audio con archivo trae reproductor con respaldo m4a y su transcripción
   assert.ok(html.includes('mándame la &lt;factura&gt;') && !html.includes('<factura>'));
 });
 
-test('lo anterior a la vigilancia o sin archivo se explica en vez de mostrar un reproductor roto', () => {
+test('un audio o imagen sin archivo se explica en vez de mostrar un reproductor roto, con el mismo lenguaje en todos', () => {
   const html = renderConversacion(base({
     total: 3,
     mensajes: [
@@ -97,10 +97,11 @@ test('lo anterior a la vigilancia o sin archivo se explica en vez de mostrar un 
     ],
   }));
   assert.ok(!html.includes('<audio') && !html.includes('<img'));
-  assert.equal((html.match(/Es de antes de vigilar este chat/g) || []).length, 2);
-  assert.match(html, /<strong>Audio no disponible<\/strong>/);
-  assert.match(html, /<strong>Imagen no disponible<\/strong>/);
-  assert.match(html, /<strong>Archivo no disponible<\/strong>/);
+  assert.equal((html.match(/No se puede pedir de nuevo a WhatsApp/g) || []).length, 2);
+  assert.equal((html.match(/<strong>Audio no guardado<\/strong>/g) || []).length, 2);
+  assert.match(html, /<strong>Imagen no guardada<\/strong>/);
+  assert.match(html, /No se guardó el archivo de este mensaje/);
+  assert.ok(!/no disponible|vigilar/i.test(html), 'ya no habla de vigilar ni de "no disponible"');
   assert.equal((html.match(/class="sin-medio"/g) || []).length, 3);
 });
 
@@ -163,12 +164,12 @@ test('el manejador devuelve los mensajes del día pedido, con nombre y en orden'
   try {
     await almacen.guardar({ id: 'a', chat: CHAT, tipo: 'texto', texto: 'segundo', fecha: loc(2026, 10, 9, 10), propio: false, nombre: 'Ana', esGrupo: true });
     await almacen.guardar({ id: 'b', chat: CHAT, tipo: 'texto', texto: 'primero', fecha: loc(2026, 10, 9, 8), propio: false, nombre: 'Beto', esGrupo: true });
-    await almacen.guardar({ id: 'c', chat: CHAT, tipo: 'texto', texto: 'otro día', fecha: loc(2026, 10, 8, 8), propio: false, nombre: 'Ana', esGrupo: true });
+    await almacen.guardar({ id: 'c', chat: CHAT, tipo: 'texto', texto: 'mensaje de otra fecha', fecha: loc(2026, 10, 8, 8), propio: false, nombre: 'Ana', esGrupo: true });
     const r = await manejar({ ruta: q({ chat: CHAT, desde: '2026-11-09', hasta: '2026-11-09' }) });
     assert.equal(r.estado, 200);
     assert.match(r.html, /<h1>Bodega Norte<\/h1>/);
     assert.ok(r.html.indexOf('primero') < r.html.indexOf('segundo'));
-    assert.ok(!r.html.includes('otro día'));
+    assert.ok(!r.html.includes('mensaje de otra fecha'));
     assert.match(r.html, /2 mensajes/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -195,7 +196,7 @@ test('el manejador enlaza los archivos que existen y lee la transcripción guard
     const r = await manejar({ ruta: q({ chat: CHAT, desde: '2026-11-09', hasta: '2026-11-09' }) });
     assert.ok(r.html.includes('src="/medios/AUD1"') && r.html.includes('src="/medios/IMG1"'));
     assert.ok(r.html.includes('necesito la cotización'));
-    assert.match(r.html, /Archivo no disponible/);
+    assert.match(r.html, /Audio no guardado/);
     assert.ok(!r.html.includes('/medios/FALTA'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -258,4 +259,29 @@ test('si el reporte viene de una página anterior sin id en la dirección, la co
   const html = renderConversacion(base({ total: 1, mensajes: [msg()] }));
   assert.match(html, /document\.referrer/);
   assert.match(html, /\/reportes\/\[a-z0-9-\]\+/);
+});
+
+test('la conversación ofrece ir a otro día y entiende el parámetro dia', async () => {
+  const { dir, almacen, manejar } = await montar();
+  try {
+    await almacen.guardar({ id: 'a', chat: CHAT, tipo: 'texto', texto: 'del 9', fecha: loc(2026, 10, 9, 9, 0), propio: false, nombre: 'Ana', esGrupo: true });
+    await almacen.guardar({ id: 'b', chat: CHAT, tipo: 'texto', texto: 'del 3', fecha: loc(2026, 10, 3, 9, 0), propio: false, nombre: 'Ana', esGrupo: true });
+    const r = await manejar({ ruta: q({ chat: CHAT, desde: '2026-11-09', hasta: '2026-11-09' }) });
+    assert.match(r.html, /<form id="ir-dia" method="get" action="\/conversacion"/);
+    assert.match(r.html, /<input type="date" name="dia"[^>]*min="2026-11-03"[^>]*max="2026-11-09"/);
+    const otro = await manejar({ ruta: q({ chat: CHAT, dia: '2026-11-03' }) });
+    assert.ok(otro.html.includes('del 3') && !otro.html.includes('del 9'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('un periodo sin mensajes dice de qué fechas sí hay y deja ir a ese día', async () => {
+  const { dir, almacen, manejar } = await montar();
+  try {
+    await almacen.guardar({ id: 'a', chat: CHAT, tipo: 'texto', texto: 'x', fecha: loc(2026, 10, 3, 9, 0), propio: false, nombre: 'Ana', esGrupo: true });
+    const r = await manejar({ ruta: q({ chat: CHAT, desde: '2026-11-09', hasta: '2026-11-09' }) });
+    assert.match(r.html, /No hay mensajes guardados de este chat en ese periodo/);
+    assert.match(r.html, /Este chat tiene mensajes guardados el martes 3 de noviembre de 2026/);
+    assert.ok(!/vigilar/i.test(r.html));
+    assert.match(r.html, /id="ir-dia"/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
