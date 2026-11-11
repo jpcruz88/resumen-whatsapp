@@ -71,10 +71,11 @@ test('el reporte lleva el nombre del chat y la cantidad de mensajes', async () =
   assert.match(html, /Desarrollado por JP/);
 });
 
-test('sin mensajes el reporte explica desde cuándo se vigila y no llama a Gemini', async () => {
+test('sin mensajes en el periodo el reporte dice de qué fechas sí hay y no llama a Gemini', async () => {
   const { base, almacen } = await montar(true);
-  const desdeVigilar = new Date(2026, 10, 9, 19, 56, 0, 0).toISOString();
-  const vigilados = { esVigilado: async () => true, desdeDe: async () => desdeVigilar };
+  await almacen.guardar({ id: 'v1', chat: CHAT, tipo: 'texto', texto: 'viejo', fecha: new Date(2026, 6, 29, 10).toISOString(), propio: false });
+  await almacen.guardar({ id: 'v2', chat: CHAT, tipo: 'texto', texto: 'último', fecha: new Date(2026, 9, 5, 10).toISOString(), propio: false });
+  const vigilados = { esVigilado: async () => true };
   const fetchFn = fakeFetch();
   const { id } = await generarReporte({
     chat: CHAT, nombre: 'Bodega Norte', desde: '2026-11-09T00:00:00Z', hasta: '2026-11-10T00:00:00Z',
@@ -82,7 +83,7 @@ test('sin mensajes el reporte explica desde cuándo se vigila y no llama a Gemin
   });
   assert.equal(fetchFn.llamadas.length, 0);
   const html = await readFile(join(base, 'r', `${id}.html`), 'utf8');
-  assert.match(html, /Se empezó a vigilar el 9 de noviembre de 2026, 19:56/);
+  assert.match(html, /Este chat tiene mensajes guardados del 29 de julio al 5 de octubre de 2026/);
 });
 
 test('un audio anterior a la vigilancia no se transcribe ni se pide a Evolution', async () => {

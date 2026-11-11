@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { etiquetaPeriodo, fechaHoraLarga } from './fechas.js';
+import { etiquetaPeriodo } from './fechas.js';
 import { BASE_CSS, FLECHA as FLECHA_VOLVER, ICONO_CHAT } from './estilos.js';
 
 const ENTIDADES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -67,14 +67,14 @@ p{margin:10px 0}
 
 
 // mensajes: cuántos mensajes se resumieron. Con 0 no hay resumen y se explica por qué.
-export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, vigiladoDesde, version, enlaceConversacion }) {
+export function renderReporte({ chat, nombre, desde, hasta, markdown, mensajes, guardados, version, enlaceConversacion }) {
   const titulo = escaparHtml(nombre || chat || 'Resumen');
   const periodo = escaparHtml(etiquetaPeriodo(desde, hasta));
   const cuenta = Number.isInteger(mensajes) ? `${mensajes} ${mensajes === 1 ? 'mensaje' : 'mensajes'}` : '';
   const vacio = mensajes === 0;
-  const desdeVigilar = vigiladoDesde
-    ? `Se empezó a vigilar el ${escaparHtml(fechaHoraLarga(vigiladoDesde))}. Solo se guardan los mensajes que llegan desde entonces.`
-    : 'Solo se guardan los mensajes que llegan después de empezar a vigilar el chat.';
+  const desdeVigilar = guardados?.primero && guardados?.ultimo
+    ? `Este chat tiene mensajes guardados del ${escaparHtml(etiquetaPeriodo(guardados.primero, guardados.ultimo))}. Prueba con otro periodo.`
+    : 'Todavía no hay ningún mensaje guardado de este chat. Los que lleguen se guardan solos.';
   const cuerpo = vacio
     ? `<div class="vacio"><p><strong>No hay mensajes guardados de este chat en ese periodo.</strong></p><p>${desdeVigilar}</p></div>`
     : markdownAHtml(markdown);

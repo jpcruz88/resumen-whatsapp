@@ -58,17 +58,20 @@ test('renderReporte con un solo mensaje dice "1 mensaje"', () => {
   assert.match(html, /1 mensaje(?!s)/);
 });
 
-test('renderReporte sin mensajes explica por qué y desde cuándo se vigila, en vez de un resumen vacío', () => {
-  const desdeVigilar = new Date(2026, 10, 9, 19, 56, 0, 0).toISOString();
+test('renderReporte sin mensajes en el periodo dice de qué fechas sí hay mensajes guardados', () => {
   const html = renderReporte({
-    chat: 'a@g.us', nombre: 'Bodega Norte', markdown: 'No hay mensajes en ese periodo.', mensajes: 0, vigiladoDesde: desdeVigilar,
+    chat: 'a@g.us', nombre: 'Bodega Norte', markdown: 'No hay mensajes en ese periodo.', mensajes: 0,
+    guardados: { primero: new Date(2026, 6, 29, 10).toISOString(), ultimo: new Date(2026, 10, 9, 19).toISOString() },
   });
   assert.match(html, /No hay mensajes guardados de este chat en ese periodo/);
-  assert.match(html, /Se empezó a vigilar el 9 de noviembre de 2026, 19:56/);
-  assert.match(html, /Solo se guardan los mensajes que llegan desde entonces/);
-  assert.ok(!html.includes('No hay mensajes en ese periodo.</p>'), 'no repite el texto genérico');
-  const sinFecha = renderReporte({ chat: 'a@g.us', nombre: 'X', markdown: '', mensajes: 0 });
-  assert.match(sinFecha, /Solo se guardan los mensajes que llegan después de empezar a vigilar el chat/);
+  assert.match(html, /Este chat tiene mensajes guardados del 29 de julio al 9 de noviembre de 2026\. Prueba con otro periodo\./);
+  assert.ok(!html.includes('Se empezó a vigilar'), 'ya no afirma que solo se guarda desde que se vigila');
+});
+
+test('renderReporte sin mensajes en todo el chat explica que los nuevos se guardan al llegar', () => {
+  const html = renderReporte({ chat: 'a@g.us', nombre: 'X', markdown: '', mensajes: 0, guardados: null });
+  assert.match(html, /No hay mensajes guardados de este chat en ese periodo/);
+  assert.match(html, /Todavía no hay ningún mensaje guardado de este chat\. Los que lleguen se guardan solos\./);
 });
 
 test('renderReporte con mensajes muestra el resumen y no la nota de vacío', () => {
