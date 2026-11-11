@@ -229,3 +229,12 @@ test('servirReporte sigue rechazando traversal, barras, % y mayusculas', async (
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('un reporte guardado antes de que existieran las negritas se sirve sin asteriscos', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rep-'));
+  try {
+    await writeFile(join(dir, 'viejo-1.html'), '<ul><li>**Reporte de NIP:** Rokiloki</li><li>2 * 3 * 4</li></ul>');
+    const r = await servirReporte({ dirReportes: dir, id: 'viejo-1' });
+    assert.equal(r.html, '<ul><li><strong>Reporte de NIP:</strong> Rokiloki</li><li>2 * 3 * 4</li></ul>');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

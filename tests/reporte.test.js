@@ -154,3 +154,17 @@ test('guardarReporte usa el id que se le da, para poder enlazarlo antes de escri
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('markdownAHtml convierte **negritas** y *cursivas* sin dejar asteriscos y sin abrir la puerta a HTML', () => {
+  const html = markdownAHtml('- **Reporte de NIP:** Rokiloki envió la lista [2026-11-10 13:22]\n- texto con *énfasis* y **(?)** al final\n- <b>**x**</b> y 2 * 3 * 4');
+  assert.ok(html.includes('<li><strong>Reporte de NIP:</strong> Rokiloki envió la lista <time class="cita"'), html);
+  assert.ok(html.includes('<em>énfasis</em>') && html.includes('<strong>(?)</strong>'));
+  assert.ok(html.includes('&lt;b&gt;<strong>x</strong>&lt;/b&gt;'), 'el HTML ajeno sigue escapado');
+  assert.ok(html.includes('2 * 3 * 4'), 'un asterisco suelto no se toca');
+  assert.ok(!/\*\*/.test(html.replace('2 * 3 * 4', '')), 'no quedan ** sueltos');
+});
+
+test('markdownAHtml reconoce las viñetas con negrita al inicio como etiqueta del punto', () => {
+  const html = markdownAHtml('- **Normativa:** Se implementó la detección');
+  assert.match(html, /<li><strong class="etiqueta">Normativa:<\/strong> Se implementó la detección<\/li>|<li><strong>Normativa:<\/strong> Se implementó/);
+});

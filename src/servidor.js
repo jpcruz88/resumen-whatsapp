@@ -80,7 +80,9 @@ export function crearManejador({ almacen, secreto, evolution }) {
 export async function servirReporte({ dirReportes, id }) {
   if (!/^[a-z0-9-]+$/.test(String(id ?? ''))) return { estado: 404, cuerpo: { error: 'no encontrado' } };
   try {
-    return { estado: 200, html: await readFile(join(dirReportes, `${id}.html`), 'utf8') };
+    const html = await readFile(join(dirReportes, `${id}.html`), 'utf8');
+    // Los reportes anteriores a las negritas guardaron los ** tal cual: se corrigen al servirlos.
+    return { estado: 200, html: html.replace(/\*\*([^*<>\n]+?)\*\*/g, '<strong>$1</strong>') };
   } catch {
     return { estado: 404, cuerpo: { error: 'no encontrado' } };
   }

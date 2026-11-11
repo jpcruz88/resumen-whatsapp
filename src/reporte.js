@@ -22,13 +22,20 @@ function conCitas(texto) {
   });
 }
 
+// Negritas (**así**) y cursivas (*así*) del resumen, más las citas de fecha. El texto ya viene escapado.
+function enLinea(texto) {
+  return conCitas(texto)
+    .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, '$1<em>$2</em>');
+}
+
 export function markdownAHtml(md) {
   const salida = [];
   let lista = false;
   let parrafo = [];
   const cerrarLista = () => { if (lista) { salida.push('</ul>'); lista = false; } };
   const cerrarParrafo = () => {
-    if (parrafo.length) { salida.push(`<p>${conCitas(parrafo.join(' '))}</p>`); parrafo = []; }
+    if (parrafo.length) { salida.push(`<p>${enLinea(parrafo.join(' '))}</p>`); parrafo = []; }
   };
   for (const cruda of escaparHtml(md).split(/\r?\n/)) {
     const linea = cruda.trim();
@@ -39,7 +46,7 @@ export function markdownAHtml(md) {
     else if ((m = linea.match(/^[-*]\s+(.*)$/))) {
       cerrarParrafo();
       if (!lista) { salida.push('<ul>'); lista = true; }
-      salida.push(`<li>${conCitas(m[1])}</li>`);
+      salida.push(`<li>${enLinea(m[1])}</li>`);
     } else { cerrarLista(); parrafo.push(linea); }
   }
   cerrarLista();
@@ -56,7 +63,8 @@ h2{margin:24px 0 8px;padding-top:16px;border-top:1px solid var(--borde);font-siz
 .contenido>h2:first-child{margin-top:12px;padding-top:0;border-top:0}
 h3{margin:18px 0 6px;font-size:1.05rem}
 ul{margin:6px 0;padding-left:1.25rem}
-li{margin:8px 0}
+li{margin:8px 0;line-height:1.5}
+strong{font-weight:650}
 p{margin:10px 0}
 .cita{display:inline-block;padding:0 7px;border-radius:6px;background:var(--acento-suave);font-size:.85em;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .contenido.sin-tarjeta{padding:0;background:none;border:0}

@@ -94,7 +94,7 @@ test('resumenChats lista cada chat con total, primer y último mensaje, más rec
 test('estados, difusiones y canales no son chats', async () => {
   const { dir, almacen, enviar } = await montar();
   try {
-    await enviar(lote(msg({ id: 's', jid: 'status@broadcast', texto: 'estado' }), msg({ id: 'n', jid: '1203630000000000@newsletter', texto: 'canal' })));
+    await enviar(lote(msg({ id: 's', jid: 'status@broadcast', texto: 'estado' }), msg({ id: 'n', jid: '120363000000000009@newsletter', texto: 'canal' })));
     assert.deepEqual(await almacen.resumenChats(), []);
   } finally { await limpiar(dir); }
 });
