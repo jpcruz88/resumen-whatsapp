@@ -238,3 +238,61 @@ test('un reporte guardado antes de que existieran las negritas se sirve sin aste
     assert.equal(r.html, '<ul><li><strong>Reporte de NIP:</strong> Rokiloki</li><li>2 * 3 * 4</li></ul>');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- resumir un video de Instagram ----------
+
+const REEL = 'https://www.instagram.com/reel/Cxyz123/';
+const post = (panel, ruta, cuerpo) => panel({ metodo: 'POST', ruta, cuerpo });
+
+test('GET /video muestra el formulario con la lista de chats y un enlace desde el inicio', async () => {
+  const { panel } = montar({ video: async () => 'x' });
+  const r = await get(panel, '/video');
+  assert.equal(r.estado, 200);
+  assert.match(r.html, /<form id="form-video"/);
+  assert.match(r.html, /type="url"/);
+  assert.ok(r.html.includes('Equipo Ventas'));
+  const inicio = await get(panel, '/');
+  assert.match(inicio.html, /href="\/video"/);
+});
+
+test('sin soporte de video, /video no existe y el inicio no muestra el enlace', async () => {
+  const { panel } = montar();
+  assert.equal((await get(panel, '/video')).estado, 404);
+  assert.ok(!(await get(panel, '/')).html.includes('href="/video"'));
+});
+
+test('POST /video/resumen valida el enlace y devuelve el resumen', async () => {
+  const pedidos = [];
+  const { panel } = montar({ video: async (url) => { pedidos.push(url); return 'Resumen de prueba'; } });
+  const ok = await post(panel, '/video/resumen', { url: REEL });
+  assert.equal(ok.estado, 200);
+  assert.deepEqual(ok.cuerpo, { resumen: 'Resumen de prueba' });
+  assert.deepEqual(pedidos, [REEL]);
+  for (const mala of [undefined, '', 'https://evil.test/x', 'http://www.instagram.com/reel/x/', 42]) {
+    const r = await post(panel, '/video/resumen', { url: mala });
+    assert.equal(r.estado, 400, String(mala));
+  }
+  assert.equal(pedidos.length, 1);
+});
+
+test('si el video falla, responde 502 con el motivo y no revienta', async () => {
+  const { panel } = montar({ video: async () => { throw new Error('No se pudo bajar el video: login required'); } });
+  const r = await post(panel, '/video/resumen', { url: REEL });
+  assert.equal(r.estado, 502);
+  assert.match(r.cuerpo.error, /login required/);
+});
+
+test('solo se procesa un video a la vez', async () => {
+  let libera;
+  const { panel } = montar({ video: () => new Promise((res) => { libera = () => res('listo'); }) });
+  const primero = post(panel, '/video/resumen', { url: REEL });
+  await new Promise((r) => setImmediate(r));
+  const segundo = await post(panel, '/video/resumen', { url: REEL });
+  assert.equal(segundo.estado, 429);
+  libera();
+  assert.equal((await primero).estado, 200);
+  const tercero = post(panel, '/video/resumen', { url: REEL });
+  await new Promise((r) => setImmediate(r));
+  libera();
+  assert.equal((await tercero).estado, 200);
+});

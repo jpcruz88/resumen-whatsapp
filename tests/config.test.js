@@ -78,5 +78,6 @@ test('INSTAGRAM_COOKIE es opcional: sin ella Instagram queda apagado', () => {
   const base = { SECRETO_WEBHOOK: 's', GEMINI_API_KEY: 'g', EVOLUTION_API_URL: 'http://x', EVOLUTION_API_KEY: 'k', EVOLUTION_INSTANCE: 'i' };
   assert.equal(leerConfig(base).instagram, null);
   const c = leerConfig({ ...base, INSTAGRAM_COOKIE: 'sessionid=1; csrftoken=2', INSTAGRAM_PAGINAS: '3' });
-  assert.deepEqual(c.instagram, { cookie: 'sessionid=1; csrftoken=2', paginasMax: 3 });
+  assert.deepEqual(c.instagram, { cookie: 'sessionid=1; csrftoken=2', paginasMax: 3, enVivo: false });
+  assert.equal(leerConfig({ ...base, INSTAGRAM_COOKIE: 'a=b', INSTAGRAM_LECTURA: '1' }).instagram.enVivo, true);
 });

@@ -1,6 +1,7 @@
 // Rutas del panel web: la lista de chats guardados, la página de cada chat y el pedido de resúmenes.
 // Se alcanza por el tunel de Cloudflare protegido con Access; no usa apikey. Las páginas viven en panel-pagina.js.
-import { pagina, paginaChat } from './panel-pagina.js';
+import { pagina, paginaChat, paginaVideo } from './panel-pagina.js';
+import { urlValida } from './video.js';
 import { inicioDelDia, finDelDia, diaLocal } from './fechas.js';
 import { escaparHtml } from './reporte.js';
 import pkg from '../package.json' with { type: 'json' };
@@ -10,7 +11,8 @@ const AVISO_DESCONECTADO = 'WhatsApp está desconectado: no se puede cargar la l
 const SOLO_NUMERO = /^\d{6,}$/;
 const esNombre = (n) => typeof n === 'string' && n.trim() !== '' && !SOLO_NUMERO.test(n.trim());
 
-export function crearPanel({ almacen, evolution, nombres, generar, ahora = () => new Date() }) {
+export function crearPanel({ almacen, evolution, nombres, generar, video, ahora = () => new Date() }) {
+  let videoEnCurso = false;
   // jid -> nombre, de los contactos y grupos de Evolution y del mapa de nombres. Si Evolution no responde, ok=false.
   async function leerNombres() {
     const mapa = new Map();
@@ -60,7 +62,7 @@ export function crearPanel({ almacen, evolution, nombres, generar, ahora = () =>
     if (metodo === 'GET' && ruta === '/') {
       const { mapa, ok } = await leerNombres();
       const chats = await listaDeChats(mapa);
-      return { estado: 200, html: pagina(chats, pkg.version, ok ? '' : AVISO_DESCONECTADO, ahora()) };
+      return { estado: 200, html: pagina(chats, pkg.version, ok ? '' : AVISO_DESCONECTADO, ahora(), Boolean(video)) };
     }
 
     if (metodo === 'GET' && ruta === '/chat') {
@@ -70,7 +72,26 @@ export function crearPanel({ almacen, evolution, nombres, generar, ahora = () =>
       const { mapa } = await leerNombres();
       const hoy = diaLocal(ahora().toISOString()) === diaLocal(c.ultimo);
       const chats = await listaDeChats(mapa);
-      return { estado: 200, html: paginaChat({ jid: c.chat, nombre: await nombreDe(c, mapa), esGrupo: c.esGrupo, total: c.total, primero: c.primero, ultimo: c.ultimo, hoy }, pkg.version, ahora(), chats) };
+      return { estado: 200, html: paginaChat({ jid: c.chat, nombre: await nombreDe(c, mapa), esGrupo: c.esGrupo, total: c.total, primero: c.primero, ultimo: c.ultimo, hoy }, pkg.version, ahora(), chats, Boolean(video)) };
+    }
+
+    if (video && metodo === 'GET' && ruta === '/video') {
+      const { mapa } = await leerNombres();
+      return { estado: 200, html: paginaVideo(await listaDeChats(mapa), pkg.version, ahora()) };
+    }
+
+    if (video && metodo === 'POST' && ruta === '/video/resumen') {
+      const url = cuerpo?.url;
+      if (typeof url !== 'string' || !urlValida(url)) return { estado: 400, cuerpo: { error: 'Pega un enlace de Instagram que empiece con https://www.instagram.com/' } };
+      if (videoEnCurso) return { estado: 429, cuerpo: { error: 'Ya hay un video en proceso. Espera a que termine.' } };
+      videoEnCurso = true;
+      try {
+        return { estado: 200, cuerpo: { resumen: await video(url) } };
+      } catch (e) {
+        return { estado: 502, cuerpo: { error: e.message } };
+      } finally {
+        videoEnCurso = false;
+      }
     }
 
     if (metodo === 'POST' && ruta === '/resumen') {

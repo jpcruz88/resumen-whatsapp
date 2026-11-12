@@ -22,6 +22,9 @@ import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
 import { PALETA_CSS, DETECTAR_MARCO } from './estilos.js';
 import { crearClienteInstagram, iniciarInstagram, leerNombresInstagram } from './instagram.js';
+import { descargarVideo, resumirVideo } from './video.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -250,6 +253,16 @@ export async function arrancar(env = process.env) {
       almacen,
       nombres,
       evolution: { listarChats },
+      // Resumen de un video de Instagram: se baja a una carpeta temporal, se resume y se borra.
+      video: async (url) => {
+        const temporal = await mkdtemp(join(tmpdir(), 'resumen-video-'));
+        try {
+          const ruta = await descargarVideo({ url, cookie: cfg.instagram?.cookie, dir: temporal });
+          return await resumirVideo({ ruta, apiKey: cfg.geminiKey, model: cfg.geminiModel });
+        } finally {
+          await rm(temporal, { recursive: true, force: true });
+        }
+      },
       generar: ({ chat, nombre, desde, hasta }) =>
         generarReporte({ chat, nombre, desde, hasta, almacen, vigilados, medios, dirReportes, evolution, nombres }),
     }),
@@ -262,7 +275,7 @@ export async function arrancar(env = process.env) {
   // Lo que se guardó aparte cuando se elegían chats a vigilar pasa al almacén de todos los chats.
   almacen.migrarBuzon().then((n) => n > 0 && console.log('buzón migrado:', n, 'mensajes'), () => console.error('no se pudo migrar el buzón'));
 
-  if (cfg.instagram) {
+  if (cfg.instagram?.enVivo) {
     try {
       const cliente = crearClienteInstagram({ cookie: cfg.instagram.cookie });
       iniciarInstagram({ cliente, almacen, dir, paginasMax: cfg.instagram.paginasMax });

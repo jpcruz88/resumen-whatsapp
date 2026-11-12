@@ -2,6 +2,7 @@
 // lo manda a Gemini. La cookie viaja en un archivo temporal de modo 600 que se borra siempre; nunca va en
 // los argumentos del comando, en errores ni en registros.
 import { readFile, writeFile, readdir, rm, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, extname } from 'node:path';
@@ -24,7 +25,10 @@ export function cookieANetscape(cookie) {
   return `# Netscape HTTP Cookie File\n${filas.join('\n')}\n`;
 }
 
-const ejecutarPorDefecto = promisify(execFile);
+const execFileP = promisify(execFile);
+// Con launchd el PATH no incluye Homebrew: se busca yt-dlp en su sitio habitual. Tope de 3 minutos.
+const YT_DLP = process.env.YT_DLP || ['/opt/homebrew/bin/yt-dlp', '/usr/local/bin/yt-dlp'].find((r) => existsSync(r)) || 'yt-dlp';
+const ejecutarPorDefecto = (_cmd, args) => execFileP(YT_DLP, args, { timeout: 180_000 });
 
 export async function descargarVideo({ url, cookie, dir, ejecutar = ejecutarPorDefecto }) {
   if (!urlValida(url)) throw new Error('Pasa un enlace de Instagram (https://www.instagram.com/...)');

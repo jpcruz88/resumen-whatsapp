@@ -23,8 +23,9 @@ export function leerConfig(env = process.env) {
     geminiKey: env.GEMINI_API_KEY,
     geminiModel: env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
     panelHosts: lista(env.PANEL_HOSTS),
-    // Instagram es opcional: sin INSTAGRAM_COOKIE queda apagado.
-    instagram: env.INSTAGRAM_COOKIE ? { cookie: env.INSTAGRAM_COOKIE, paginasMax: Number(env.INSTAGRAM_PAGINAS) || 10 } : null,
+    // La cookie de Instagram es opcional (sirve para bajar videos). La lectura en vivo de mensajes está apagada
+    // salvo INSTAGRAM_LECTURA=1: Instagram ya no la permite por la web.
+    instagram: env.INSTAGRAM_COOKIE ? { cookie: env.INSTAGRAM_COOKIE, paginasMax: Number(env.INSTAGRAM_PAGINAS) || 10, enVivo: env.INSTAGRAM_LECTURA === '1' } : null,
     evolution: {
       url: env.EVOLUTION_API_URL,
       apiKey: env.EVOLUTION_API_KEY,

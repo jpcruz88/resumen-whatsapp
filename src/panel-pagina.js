@@ -48,6 +48,9 @@ input, select, button { font: inherit; color: inherit; caret-color: var(--acento
 .marca a { color: inherit; text-decoration: none; }
 .lat-cuerpo { padding: 0 12px; }
 .aviso-global { padding: 0 12px 8px; }
+.lat-video { margin: 0; padding: 0 16px 10px; font-size: .88rem; }
+.lat-video a { color: var(--acento); text-decoration: underline; text-underline-offset: 2px; }
+.resumen-video { white-space: pre-wrap; line-height: 1.55; margin: 0; }
 .aviso-global .msg { margin: 0; }
 .detalle { padding: 16px; }
 .detalle-vacio { display: none; }
@@ -375,7 +378,7 @@ ${ICONO_FLECHA}</a></li>`;
 }
 
 // La columna izquierda: buscador, filtro y lista. Igual en la pantalla inicial y en cada chat.
-function lateral(chats, version, aviso, ahora, activo) {
+function lateral(chats, version, aviso, ahora, activo, conVideo = false) {
   const cuerpo = chats.length === 0
     ? `<div class="vacio"><p><strong>Todavía no hay mensajes guardados.</strong></p><p class="suave">Aparecen aquí en cuanto WhatsApp manda los primeros chats al servicio.</p></div>`
     : `<div class="lat-cuerpo"><label class="solo-lectores" for="buscar">Buscar entre ${chats.length} ${chats.length === 1 ? 'chat' : 'chats'}</label>
@@ -394,15 +397,70 @@ ${chats.map((c) => fila(c, ahora, c.jid === activo)).join('\n')}
   return `<aside class="lateral" aria-label="Chats">
 <div class="lat-cab"><span class="logo">${svg(GLOBO)}</span><p class="marca"><a href="/">Resumen de WhatsApp</a></p></div>
 <div class="aviso-global"><p id="aviso" class="msg error" role="alert"${aviso ? '' : ' hidden'}>${escaparHtml(aviso)}</p></div>
+${conVideo ? `<p class="lat-video"><a href="/video"${activo === 'video' ? ' aria-current="page"' : ''}>Resumir un video de Instagram</a></p>` : ''}
 ${cuerpo}
 ${pie(version)}
 </aside>`;
 }
 
+const JS_VIDEO = String.raw`
+(() => {
+  const form = document.querySelector('#form-video');
+  const estado = document.querySelector('#estado-video');
+  const boton = form.querySelector('button[type=submit]');
+  function mostrar(tipo, texto) {
+    estado.replaceChildren();
+    const m = document.createElement('div');
+    m.className = 'msg ' + tipo;
+    m.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+    const p = document.createElement(tipo === 'ok' ? 'div' : 'p');
+    if (tipo === 'ok') p.className = 'resumen-video';
+    p.textContent = texto;
+    m.append(p);
+    estado.append(m);
+  }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = form.elements.url.value.trim();
+    if (!url) return mostrar('error', 'Pega el enlace del video de Instagram.');
+    boton.disabled = true;
+    mostrar('info', 'Bajando y resumiendo el video. Puede tardar un minuto…');
+    try {
+      const r = await fetch('/video/resumen', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) mostrar('ok', d.resumen);
+      else mostrar('error', d.error || 'No se pudo resumir el video.');
+    } catch {
+      mostrar('error', 'No se pudo comunicar con el servicio. Intenta de nuevo.');
+    } finally {
+      boton.disabled = false;
+    }
+  });
+})();
+`;
+
+export function paginaVideo(chats, version, ahora = new Date()) {
+  const cuerpo = `<div class="app con-chat">
+${lateral(chats, version, '', ahora, 'video', true)}
+<main class="detalle">
+<a class="volver solo-movil" href="/">${ICONO_ATRAS}Todos los chats</a>
+<div class="det-cab"><h1>Resumir un video de Instagram</h1><p class="suave">Pega el enlace de un reel o video. Se baja, se resume con Gemini y no se guarda.</p></div>
+<form id="form-video" novalidate aria-label="Resumir un video de Instagram">
+<label for="url-video">Enlace del video</label>
+<input type="url" id="url-video" name="url" placeholder="https://www.instagram.com/reel/…" autocomplete="off" inputmode="url" required>
+<button type="submit" class="boton">Resumir video</button>
+</form>
+<div id="estado-video" aria-live="polite"></div>
+${pie(version)}
+</main>
+</div>`;
+  return documento('Resumir un video', cuerpo, `<script>${JS_VIDEO}</script>`);
+}
+
 // chats: [{ jid, nombre, numero?, esGrupo, total, ultimo }] ya ordenados, el más reciente primero.
-export function pagina(chats, version, aviso = '', ahora = new Date()) {
+export function pagina(chats, version, aviso = '', ahora = new Date(), conVideo = false) {
   const cuerpo = `<div class="app">
-${lateral(chats, version, aviso, ahora, null)}
+${lateral(chats, version, aviso, ahora, null, conVideo)}
 <main class="detalle detalle-vacio solo-escritorio"><div><h2>Elige un chat</h2><p>Su resumen o su conversación aparecen aquí.</p></div></main>
 </div>`;
   return documento('Resumen de WhatsApp', cuerpo, `<script>${JS_LISTA}</script>`);
@@ -410,13 +468,13 @@ ${lateral(chats, version, aviso, ahora, null)}
 
 // c: { jid, nombre, esGrupo, total, primero, ultimo, hoy }  hoy: ¿hay mensajes de hoy?
 // chats: la misma lista de la pantalla inicial, para mostrarla a la izquierda.
-export function paginaChat(c, version, ahora = new Date(), chats = []) {
+export function paginaChat(c, version, ahora = new Date(), chats = [], conVideo = false) {
   const nombre = escaparHtml(c.nombre);
   const meta = `${plural(c.total)}, ${escaparHtml(etiquetaRango(c.primero, c.ultimo))}`;
   const dia = diaLocal(c.ultimo);
   const sugerencia = c.hoy ? '' : `<p class="ultimo">Hoy no hay mensajes. El último fue ${escaparHtml(etiquetaReciente(c.ultimo, ahora))}. <button type="button" class="enlace" data-dia="${escaparHtml(dia)}">Usar ese día</button></p>`;
   const cuerpo = `<div class="app con-chat">
-${lateral(chats, version, '', ahora, c.jid)}
+${lateral(chats, version, '', ahora, c.jid, conVideo)}
 <main class="detalle">
 <a class="volver solo-movil" href="/">${ICONO_ATRAS}Todos los chats</a>
 <div class="det-cab"><h1>${nombre}</h1><p class="suave">${meta}</p></div>
