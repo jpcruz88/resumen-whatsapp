@@ -1,13 +1,19 @@
 #!/usr/bin/env node
-// Uso: copia el "Copy as cURL" de Instagram y corre este script.
+// Uso: node scripts/guardar-cookie-instagram.mjs [--reparar]
+// Copia el "Copy as cURL" de Instagram y corre este script.
 // Toma el curl del portapapeles (o de curl-instagram.txt si existe), guarda la
 // cookie en .env como INSTAGRAM_COOKIE y no muestra el valor.
-import { guardarCookie } from '../src/cookie-instagram.js';
+import { guardarCookie, repararEnv } from '../src/cookie-instagram.js';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 const raiz = fileURLToPath(new URL('..', import.meta.url));
+if (process.argv.includes('--reparar')) {
+  const r = await repararEnv(`${raiz}.env`);
+  console.log(!r.ok ? 'No hay INSTAGRAM_COOKIE en .env.' : r.cambio ? 'Línea de INSTAGRAM_COOKIE reparada (ahora va entre comillas).' : 'La línea ya estaba bien.');
+  process.exit(r.ok ? 0 : 1);
+}
 const archivoCurl = `${raiz}curl-instagram.txt`;
 try {
   const opciones = existsSync(archivoCurl)

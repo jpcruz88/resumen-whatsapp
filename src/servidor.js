@@ -21,6 +21,7 @@ import { buscarFfmpeg, convertirAM4a } from './audio.js';
 import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
 import { PALETA_CSS, DETECTAR_MARCO } from './estilos.js';
+import { crearClienteInstagram, iniciarInstagram, leerNombresInstagram } from './instagram.js';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -235,8 +236,10 @@ export async function arrancar(env = process.env) {
   const listarChats = conCache(() => evolution.listarChats(), { ttlMs: 5 * 60 * 1000 });
   const ffmpeg = buscarFfmpeg();
   const convertir = ffmpeg ? (origen, destino) => convertirAM4a({ origen, destino, ffmpeg }) : null;
-  const nombres = conCache(() => evolution.mapaNombres(), { ttlMs: 5 * 60 * 1000 });
-  nombres.precalentar();
+  const nombresWhatsapp = conCache(() => evolution.mapaNombres(), { ttlMs: 5 * 60 * 1000 });
+  nombresWhatsapp.precalentar();
+  // Los chats de Instagram ('ig:…') traen su nombre del archivo que guarda la sincronización.
+  const nombres = Object.assign(async () => new Map([...(await nombresWhatsapp()), ...(await leerNombresInstagram(dir))]), { precalentar: nombresWhatsapp.precalentar });
   const nombrePara = async (chat) => (await listarChats().catch(() => [])).find((c) => c.jid === chat)?.nombre;
   const manejar = crearRouter({
     webhook: crearManejador({ almacen, secreto: cfg.secreto, evolution }),
@@ -258,6 +261,16 @@ export async function arrancar(env = process.env) {
 
   // Lo que se guardó aparte cuando se elegían chats a vigilar pasa al almacén de todos los chats.
   almacen.migrarBuzon().then((n) => n > 0 && console.log('buzón migrado:', n, 'mensajes'), () => console.error('no se pudo migrar el buzón'));
+
+  if (cfg.instagram) {
+    try {
+      const cliente = crearClienteInstagram({ cookie: cfg.instagram.cookie });
+      iniciarInstagram({ cliente, almacen, dir, paginasMax: cfg.instagram.paginasMax });
+      console.log('instagram: lectura activada');
+    } catch (e) {
+      console.error('instagram: desactivado,', e.message);
+    }
+  }
 
   servidor.listen(puerto, '127.0.0.1', () => {
     console.log(`escuchando en 127.0.0.1:${puerto}`);

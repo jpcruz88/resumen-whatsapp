@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extraerCookie, guardarCookie } from '../src/cookie-instagram.js';
+import { extraerCookie, guardarCookie, repararEnv } from '../src/cookie-instagram.js';
 
 // Cookie inventada: no es de nadie.
 const FALSA = 'datr=AAAA; csrftoken=falso123; ds_user_id=1; sessionid=1%3Afalsa%3A19; rur="RMN\\0541\\0541:01ff"';
@@ -39,7 +39,7 @@ test('guardarCookie escribe la variable, borra el curl y no devuelve el valor', 
     assert.equal(r.ok, true);
     assert.ok(!JSON.stringify(r).includes('falsa'));
     const txt = await readFile(env, 'utf8');
-    assert.equal(txt, `OTRA=1\nFIN=2\nINSTAGRAM_COOKIE=${FALSA}\n`);
+    assert.equal(txt, `OTRA=1\nFIN=2\nINSTAGRAM_COOKIE='${FALSA}'\n`);
     await assert.rejects(access(curl));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -63,6 +63,30 @@ test('guardarCookie acepta el texto directo (portapapeles) y no borra nada', asy
     const env = join(dir, '.env');
     const r = await guardarCookie({ texto: CURL_B, archivoEnv: env });
     assert.equal(r.ok, true);
-    assert.equal(await readFile(env, 'utf8'), `INSTAGRAM_COOKIE=${FALSA}\n`);
+    assert.equal(await readFile(env, 'utf8'), `INSTAGRAM_COOKIE='${FALSA}'\n`);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('la línea del .env la lee el shell (. ./.env) como un solo valor', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const dir = await mkdtemp(join(tmpdir(), 'cookie-'));
+  try {
+    const env = join(dir, '.env');
+    await guardarCookie({ texto: CURL_B, archivoEnv: env });
+    const salida = execFileSync('/bin/zsh', ['-c', `set -a && . "${env}" && set +a && printf %s "$INSTAGRAM_COOKIE"`], { encoding: 'utf8' });
+    assert.equal(salida, FALSA);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('repararEnv pone entre comillas una línea guardada sin ellas y es idempotente', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cookie-'));
+  try {
+    const env = join(dir, '.env');
+    await writeFile(env, `A=1\nINSTAGRAM_COOKIE=${FALSA}\nB=2\n`);
+    assert.deepEqual(await repararEnv(env), { ok: true, cambio: true });
+    assert.equal(await readFile(env, 'utf8'), `A=1\nB=2\nINSTAGRAM_COOKIE='${FALSA}'\n`);
+    assert.deepEqual(await repararEnv(env), { ok: true, cambio: false });
+    await writeFile(env, 'A=1\n');
+    assert.deepEqual(await repararEnv(env), { ok: false, cambio: false });
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

@@ -25,6 +25,7 @@ test('leerConfig devuelve el objeto con todas las variables', () => {
     geminiKey: 'gk',
     geminiModel: 'gemini-x',
     panelHosts: [],
+    instagram: null,
     evolution: { url: 'http://127.0.0.1:8080', apiKey: 'ek', instancia: 'inst' },
   });
 });
@@ -71,4 +72,11 @@ test('cli llama generarReporte y devuelve la URL local', async () => {
 
 test('cli sin --chat lanza error', async () => {
   await assert.rejects(() => main([], ENV, {}), /--chat/);
+});
+
+test('INSTAGRAM_COOKIE es opcional: sin ella Instagram queda apagado', () => {
+  const base = { SECRETO_WEBHOOK: 's', GEMINI_API_KEY: 'g', EVOLUTION_API_URL: 'http://x', EVOLUTION_API_KEY: 'k', EVOLUTION_INSTANCE: 'i' };
+  assert.equal(leerConfig(base).instagram, null);
+  const c = leerConfig({ ...base, INSTAGRAM_COOKIE: 'sessionid=1; csrftoken=2', INSTAGRAM_PAGINAS: '3' });
+  assert.deepEqual(c.instagram, { cookie: 'sessionid=1; csrftoken=2', paginasMax: 3 });
 });
