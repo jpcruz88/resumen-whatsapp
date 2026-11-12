@@ -307,7 +307,7 @@ const JS_CHAT = String.raw`
     try {
       const r = await post('/resumen', { chat: form.dataset.chat, desde: p.desde, hasta: p.hasta });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || '');
+      if (!r.ok) throw new Error(d.error || 'respuesta ' + r.status);
       if (escritorio()) {
         estado.replaceChildren();
         abrir(d.url);
@@ -321,7 +321,8 @@ const JS_CHAT = String.raw`
         a.focus();
       }
     } catch (err) {
-      mensaje('error', 'No se pudo generar el resumen. Intenta de nuevo; si sigue fallando, revisa que el servicio esté encendido.');
+      const motivo = err && err.message ? ' Motivo: ' + err.message + '.' : '';
+      mensaje('error', 'No se pudo generar el resumen.' + motivo + ' Intenta de nuevo; si sigue fallando, revisa que el servicio esté encendido.');
     } finally {
       boton.disabled = false;
       delete boton.dataset.cargando;
