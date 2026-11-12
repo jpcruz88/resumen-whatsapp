@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { extraerCookie, guardarCookie } from '../src/cookie-instagram.js';
 
 // Cookie inventada: no es de nadie.
-const FALSA = 'datr=AAAA; csrftoken=falso123; ds_user_id=1; sessionid=1%3Afalsa%3A19; rur="RMN\\0541\\0541825986383:01ff"';
+const FALSA = 'datr=AAAA; csrftoken=falso123; ds_user_id=1; sessionid=1%3Afalsa%3A19; rur="RMN\\0541\\0541:01ff"';
 const CURL_B = `curl --url 'https://www.instagram.com/api/graphql' \\\n  -H 'accept: */*' \\\n  -b '${FALSA}' \\\n  -H 'origin: https://www.instagram.com'`;
 const CURL_COOKIE_H = `curl 'https://www.instagram.com/x' -H 'cookie: ${FALSA}' -H 'accept: */*'`;
 const CURL_DOBLE = `curl 'https://www.instagram.com/x' --cookie "datr=AAAA; sessionid=1%3Afalsa%3A19"`;
