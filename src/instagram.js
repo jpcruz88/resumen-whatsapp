@@ -5,7 +5,7 @@
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const BASE = 'https://www.instagram.com/api/v1/direct_v2';
+const BASE = 'https://i.instagram.com/api/v1/direct_v2';
 const APP_ID = '936619743392459';
 const AGENTE = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36';
 

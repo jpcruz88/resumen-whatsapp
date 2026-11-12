@@ -7,6 +7,7 @@ const INVENTADOS = [
   /^1000000000000\d{2}$/,
   /^12036300000000000\d$/,
   /^555123456789$/, /^120363000000$/, // inventados en pruebas de nombres y de grupos
+  /^936619743392459$/, // id público de la app web de Instagram (cabecera x-ig-app-id), no es de nadie
 ];
 
 // Números de 12 o más dígitos que no están en la lista de inventados.

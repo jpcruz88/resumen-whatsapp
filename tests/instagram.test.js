@@ -68,7 +68,7 @@ test('el cliente pide la bandeja con la cookie y los encabezados del navegador, 
   assert.equal(r.hayMas, true);
   assert.equal(r.cursor, 'C1');
   const { url, op } = llamadas[0];
-  assert.match(url, /^https:\/\/www\.instagram\.com\/api\/v1\/direct_v2\/inbox\//);
+  assert.match(url, /^https:\/\/i\.instagram\.com\/api\/v1\/direct_v2\/inbox\//);
   assert.equal(op.method ?? 'GET', 'GET');
   assert.equal(op.headers.cookie, COOKIE);
   assert.equal(op.headers['x-csrftoken'], 'tokenfalso');
