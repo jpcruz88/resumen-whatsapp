@@ -178,7 +178,7 @@ export function iniciarInstagram({ cliente, almacen, dir, intervaloMs = 15 * 60 
       if (r.nuevos > 0) log('instagram: mensajes nuevos', r.nuevos);
       if (r.detenido === 'sesion') { log('instagram: la cookie venció o Instagram pidió verificar la cuenta; no se reintenta hasta reiniciar'); return; }
       if (r.detenido === 'limite') { log('instagram: Instagram pidió esperar; se reintenta en una hora'); siguiente = 60 * 60 * 1000; }
-      else if (r.detenido) log('instagram:', r.mensaje);
+      else if (r.detenido) { log('instagram:', r.mensaje, '- no se reintenta hasta reiniciar'); return; }
     } catch {
       log('instagram: error inesperado al sincronizar');
     }
