@@ -20,8 +20,8 @@ export function extraerCookie(curl) {
   return null;
 }
 
-export async function guardarCookie({ archivoCurl, archivoEnv }) {
-  const cookie = extraerCookie(await readFile(archivoCurl, 'utf8'));
+export async function guardarCookie({ archivoCurl, texto, archivoEnv }) {
+  const cookie = extraerCookie(texto ?? await readFile(archivoCurl, 'utf8'));
   if (!cookie) return { ok: false, campos: [] };
   let actual = '';
   try { actual = await readFile(archivoEnv, 'utf8'); } catch { /* .env nuevo */ }
@@ -29,7 +29,7 @@ export async function guardarCookie({ archivoCurl, archivoEnv }) {
   lineas.push(`${VARIABLE}=${cookie}`);
   await writeFile(archivoEnv, `${lineas.join('\n')}\n`, { mode: 0o600 });
   await chmod(archivoEnv, 0o600);
-  await unlink(archivoCurl);
+  if (texto === undefined) await unlink(archivoCurl);
   const campos = cookie.split(';').map((c) => c.trim().split('=')[0]).filter(Boolean);
   return { ok: true, campos };
 }

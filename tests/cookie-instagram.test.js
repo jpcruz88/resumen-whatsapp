@@ -56,3 +56,13 @@ test('si el curl no trae cookie válida no toca el .env ni borra el curl', async
     await access(curl);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('guardarCookie acepta el texto directo (portapapeles) y no borra nada', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cookie-'));
+  try {
+    const env = join(dir, '.env');
+    const r = await guardarCookie({ texto: CURL_B, archivoEnv: env });
+    assert.equal(r.ok, true);
+    assert.equal(await readFile(env, 'utf8'), `INSTAGRAM_COOKIE=${FALSA}\n`);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
