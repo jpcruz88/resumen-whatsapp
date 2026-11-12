@@ -232,7 +232,7 @@ const JS_CHAT = String.raw`
     const p = validar();
     if (!p) return;
     const q = new URLSearchParams({ chat: form.dataset.chat, desde: p.desde, hasta: p.hasta });
-    window.open('/conversacion?' + q.toString(), '_blank', 'noopener');
+    window.location.href = '/conversacion?' + q.toString();
   });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -250,7 +250,7 @@ const JS_CHAT = String.raw`
       const m = mensaje('ok', 'Resumen de ' + form.dataset.nombre + ' de ' + p.cuando + ' listo.');
       const a = document.createElement('a');
       a.className = 'boton primario';
-      a.href = d.url; a.target = '_blank'; a.rel = 'noopener';
+      a.href = d.url;
       a.textContent = 'Abrir reporte';
       m.append(a);
       a.focus();
