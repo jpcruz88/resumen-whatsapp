@@ -116,7 +116,7 @@ export function parsearHilo(h, yo) {
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const pausaPorDefecto = () => dormir(3000 + Math.random() * 5000);
 
-async function guardarNombres(dir, nuevos) {
+export async function guardarNombres(dir, nuevos) {
   if (Object.keys(nuevos).length === 0) return;
   const ruta = join(dir, 'instagram-nombres.json');
   let actual = {};
