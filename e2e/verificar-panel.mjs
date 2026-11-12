@@ -119,7 +119,7 @@ if (vacio) {
   await js("document.querySelector('[data-dia]').click()"); await dormir(200);
   informe.rangoTrasSugerencia = await js("!document.querySelector('#rango').hidden && document.querySelector('#desde').value === document.querySelector('[data-dia]').dataset.dia");
   await foto('06-movil-chat-rango');
-  informe.fechasDentroDeLaFicha = await js("[...document.querySelectorAll('#rango input')].every((i) => i.getBoundingClientRect().right <= document.querySelector('.ficha').getBoundingClientRect().right)");
+  informe.fechasDentroDeLaFicha = await js("[...document.querySelectorAll('#rango input')].every((i) => i.getBoundingClientRect().right <= document.querySelector('#form-resumen').getBoundingClientRect().right)");
   await js("document.querySelector('#generar').click()"); await dormir(350);
   informe.botonDuranteCarga = await js("document.querySelector('#generar').disabled");
   await dormir(2200);
@@ -133,6 +133,14 @@ if (vacio) {
   await foto('08-escritorio-lista-claro');
   await ir(chatPersona, { ...mac, oscuro: true });
   await foto('10-escritorio-chat-oscuro');
+  // Escritorio: lista a la izquierda y detalle a la derecha, a la vez.
+  informe.dosPanelesEnEscritorio = await js("(() => { const l = document.querySelector('.lateral').getBoundingClientRect(); const d = document.querySelector('.detalle').getBoundingClientRect(); return l.width > 280 && d.left >= l.right - 1 && d.width > 500; })()");
+  informe.chatActivoMarcado = await js("document.querySelectorAll('.fila[aria-current=\"page\"]').length === 1");
+  informe.sinScrollDePaginaEnEscritorio = await js("document.documentElement.scrollHeight <= document.documentElement.clientHeight");
+  await js("document.querySelector('#generar').click()"); await dormir(2600);
+  informe.resumenSeAbreALaDerecha = await js("document.querySelector('#vista') && !document.querySelector('#vista').hidden && document.querySelector('#marco').getAttribute('src') === '/reportes/demo'");
+  informe.listaSigueVisible = await js("document.querySelector('.lateral').getBoundingClientRect().width > 280");
+  await foto('11-escritorio-resumen-derecha');
   await ir('', { ...cel, oscuro: false, ancho: 320, alto: 640 });
   informe.sinDesbordeHorizontal320 = await js(sinDesborde);
   await ir(chatPersona, { ...cel, oscuro: false, ancho: 320, alto: 640 });
@@ -145,7 +153,8 @@ const esperado = vacio
   : { sinDesbordeHorizontal390: true, sinDesbordeHorizontal320: true, chatSinDesborde320: true, visiblesSinEscribir: 40,
       visiblesGrupos: 3, soloGrupos: true, visiblesTrasMostrarMas: 64, coincidenciasAna: 40, todosLosEnlacesVanAUnChat: true,
       sugiereUltimoDia: true, fechasDentroDeLaFicha: true, rangoTrasSugerencia: true, botonDuranteCarga: true, enlaceReporte: '/reportes/demo',
-      sinSugerenciaSiHayHoy: true };
+      sinSugerenciaSiHayHoy: true, dosPanelesEnEscritorio: true, chatActivoMarcado: true,
+      sinScrollDePaginaEnEscritorio: true, resumenSeAbreALaDerecha: true, listaSigueVisible: true };
 const fallos = Object.entries(esperado).filter(([k, v]) => informe[k] !== v);
 console.log(JSON.stringify(informe, null, 1));
 if (fallos.length) {

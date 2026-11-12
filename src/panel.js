@@ -47,13 +47,19 @@ export function crearPanel({ almacen, evolution, nombres, generar, ahora = () =>
     html: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Chat no encontrado</title></head><body style="font:16px/1.5 system-ui;max-width:560px;margin:48px auto;padding:0 16px"><h1>No hay mensajes de ese chat</h1><p>Puede que el enlace esté incompleto o que aún no haya llegado ningún mensaje.</p><p><a href="/">Volver a todos los chats</a></p></body></html>`,
   });
 
+  // La lista que se ve a la izquierda, igual en la pantalla inicial y en cada chat.
+  async function listaDeChats(mapa) {
+    const chats = [];
+    for (const c of await almacen.resumenChats()) {
+      chats.push({ jid: c.chat, nombre: await nombreDe(c, mapa), numero: numeroDe(c), esGrupo: c.esGrupo, total: c.total, ultimo: c.ultimo });
+    }
+    return chats;
+  }
+
   return async function manejar({ metodo, ruta, consulta = '', cuerpo }) {
     if (metodo === 'GET' && ruta === '/') {
       const { mapa, ok } = await leerNombres();
-      const chats = [];
-      for (const c of await almacen.resumenChats()) {
-        chats.push({ jid: c.chat, nombre: await nombreDe(c, mapa), numero: numeroDe(c), esGrupo: c.esGrupo, total: c.total, ultimo: c.ultimo });
-      }
+      const chats = await listaDeChats(mapa);
       return { estado: 200, html: pagina(chats, pkg.version, ok ? '' : AVISO_DESCONECTADO, ahora()) };
     }
 
@@ -63,7 +69,8 @@ export function crearPanel({ almacen, evolution, nombres, generar, ahora = () =>
       if (!c) return noEncontrado();
       const { mapa } = await leerNombres();
       const hoy = diaLocal(ahora().toISOString()) === diaLocal(c.ultimo);
-      return { estado: 200, html: paginaChat({ jid: c.chat, nombre: await nombreDe(c, mapa), esGrupo: c.esGrupo, total: c.total, primero: c.primero, ultimo: c.ultimo, hoy }, pkg.version, ahora()) };
+      const chats = await listaDeChats(mapa);
+      return { estado: 200, html: paginaChat({ jid: c.chat, nombre: await nombreDe(c, mapa), esGrupo: c.esGrupo, total: c.total, primero: c.primero, ultimo: c.ultimo, hoy }, pkg.version, ahora(), chats) };
     }
 
     if (metodo === 'POST' && ruta === '/resumen') {

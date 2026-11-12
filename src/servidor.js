@@ -20,6 +20,7 @@ import { crearRecuperacion } from './recuperar.js';
 import { buscarFfmpeg, convertirAM4a } from './audio.js';
 import { generarReporte } from './reportar.js';
 import { leerConfig } from './config.js';
+import { PALETA_CSS, DETECTAR_MARCO } from './estilos.js';
 
 function igual(a, b) {
   const x = Buffer.from(String(a ?? ''));
@@ -82,7 +83,9 @@ export async function servirReporte({ dirReportes, id }) {
   try {
     const html = await readFile(join(dirReportes, `${id}.html`), 'utf8');
     // Los reportes anteriores a las negritas guardaron los ** tal cual: se corrigen al servirlos.
-    return { estado: 200, html: html.replace(/\*\*([^*<>\n]+?)\*\*/g, '<strong>$1</strong>') };
+    const corregido = html.replace(/\*\*([^*<>\n]+?)\*\*/g, '<strong>$1</strong>');
+    // Paleta nueva y modo «dentro del panel» también para los reportes viejos.
+    return { estado: 200, html: corregido.includes('</head>') ? corregido.replace('</head>', () => `<style>${PALETA_CSS}</style>\n${DETECTAR_MARCO}\n</head>`) : corregido };
   } catch {
     return { estado: 404, cuerpo: { error: 'no encontrado' } };
   }

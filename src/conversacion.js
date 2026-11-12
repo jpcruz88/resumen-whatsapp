@@ -5,7 +5,7 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { escaparHtml, ID_REPORTE } from './reporte.js';
 import { inicioDelDia, finDelDia, etiquetaPeriodo, etiquetaRango, etiquetaDia } from './fechas.js';
-import { BASE_CSS, FLECHA, ICONO_BUSCAR, ICONO_CHAT, ICONO_IMAGEN, ICONO_AUDIO } from './estilos.js';
+import { BASE_CSS, DETECTAR_MARCO, FLECHA, ICONO_BUSCAR, ICONO_CHAT, ICONO_IMAGEN, ICONO_AUDIO } from './estilos.js';
 import { conNombres } from './nombres.js';
 
 export const POR_PAGINA = 300;
@@ -271,6 +271,7 @@ export function renderConversacion({ nombre, chat, desde, hasta, reporte, mensaj
 <meta name="color-scheme" content="light dark">
 <title>${titulo}</title>
 <style>${BASE_CSS}${CSS}</style>
+${DETECTAR_MARCO}
 </head>
 <body>
 <div class="pagina">

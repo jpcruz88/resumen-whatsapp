@@ -93,7 +93,7 @@ ul{margin:6px 0;padding-left:1.25rem}
 li{margin:8px 0;line-height:1.5}
 strong{font-weight:650}
 p{margin:10px 0}
-.cita{display:inline-block;padding:0 7px;border-radius:6px;background:var(--acento-suave);font-size:.85em;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cita{display:inline-block;padding:0 7px;border-radius:6px;background:var(--aviso);color:var(--sobre-aviso);font-size:.85em;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .contenido.sin-tarjeta{padding:0;background:none;border:0}
 .vacio{margin:16px 0 8px;padding:16px;background:var(--sup2);border-radius:10px}
 .vacio p{margin:0 0 8px}
@@ -105,6 +105,7 @@ table.tareas th{padding:8px 12px 8px 0;text-align:left;font-size:.85rem;font-wei
 table.tareas td{padding:12px 12px 12px 0;vertical-align:top;border-bottom:1px solid var(--borde);overflow-wrap:anywhere}
 table.tareas tr:last-child td{border-bottom:0}
 table.tareas td[data-etiqueta="Tarea"]{width:56%;font-weight:600}
+table.tareas td[data-etiqueta="Tarea"]::before{content:"";display:inline-block;width:15px;height:15px;margin:0 10px -2px 0;border:1.5px solid var(--suave);border-radius:4px}
 table.tareas td[data-etiqueta="Cuándo"]{white-space:nowrap}
 .ninguna{margin:6px 0 4px;color:var(--suave)}
 .columnas{display:grid;grid-template-columns:1fr;gap:0 40px}
