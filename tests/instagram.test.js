@@ -101,6 +101,15 @@ test('sesión vencida, verificación o límite se distinguen y no filtran la coo
   for (const e of [e1, e2, e3, e4]) assert.ok(!e.message.includes('falsa') && !e.message.includes('tokenfalso'));
 });
 
+test('el error incluye el mensaje corto de Instagram, solo texto simple', async () => {
+  const c = crearClienteInstagram({ cookie: COOKIE, fetchFn: async () => respuesta(400, { message: 'useragent mismatch <script>' + 'x'.repeat(200), status: 'fail' }) });
+  const e = await c.bandeja().catch((x) => x);
+  assert.equal(e.codigo, 'otro');
+  assert.match(e.message, /HTTP 400: useragent mismatch/);
+  assert.ok(e.message.length < 140);
+  assert.ok(!e.message.includes('<'));
+});
+
 test('sin sessionid en la cookie no se crea el cliente', () => {
   assert.throws(() => crearClienteInstagram({ cookie: 'datr=AAAA' }), /INSTAGRAM_COOKIE/);
 });

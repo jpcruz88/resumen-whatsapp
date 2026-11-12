@@ -25,7 +25,9 @@ function clasificar(estado, cuerpo) {
   if (estado === 429 || /wait a few minutes|feedback_required|spam|rate/.test(msg)) {
     return new ErrorInstagram('limite', `Instagram pidió esperar (HTTP ${estado})`);
   }
-  return new ErrorInstagram('otro', `Instagram respondió HTTP ${estado}`);
+  // Solo el texto corto y simple del mensaje de Instagram: ayuda a diagnosticar y no puede traer la cookie.
+  const motivo = String(cuerpo?.message ?? '').replace(/[^\p{L}\p{N} _.,:-]/gu, '').slice(0, 80);
+  return new ErrorInstagram('otro', `Instagram respondió HTTP ${estado}${motivo ? `: ${motivo}` : ''}`);
 }
 
 export function crearClienteInstagram({ cookie, fetchFn = fetch }) {
